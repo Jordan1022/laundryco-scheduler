@@ -1,0 +1,131 @@
+
+> laundryco-scheduler@0.1.0 dev
+> next dev
+
+ ⚠ You are using a non-standard "NODE_ENV" value in your environment. This creates inconsistencies in the project and is strongly advised against. Read more: https://nextjs.org/docs/messages/non-standard-node-env
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+
+ ✓ Starting...
+ ✓ Ready in 1638ms
+ ○ Compiling / ...
+ ⨯ ./app/globals.css
+Module parse failed: Unexpected character '@' (1:0)
+> @tailwind base;
+| @tailwind components;
+| @tailwind utilities;
+
+Import trace for requested module:
+./app/globals.css
+./app/layout.tsx
+ ⨯ ./app/globals.css
+Module parse failed: Unexpected character '@' (1:0)
+> @tailwind base;
+| @tailwind components;
+| @tailwind utilities;
+
+Import trace for requested module:
+./app/globals.css
+./app/layout.tsx
+ ⨯ ./app/globals.css
+Module parse failed: Unexpected character '@' (1:0)
+> @tailwind base;
+| @tailwind components;
+| @tailwind utilities;
+
+Import trace for requested module:
+./app/globals.css
+./app/layout.tsx
+ GET / 500 in 13363ms
+ ⨯ ./app/globals.css
+Module parse failed: Unexpected character '@' (1:0)
+> @tailwind base;
+| @tailwind components;
+| @tailwind utilities;
+
+Import trace for requested module:
+./app/globals.css
+./app/layout.tsx
+ GET / 500 in 68ms
+ ⨯ ./app/globals.css
+Module parse failed: Unexpected character '@' (1:0)
+> @tailwind base;
+| @tailwind components;
+| @tailwind utilities;
+
+Import trace for requested module:
+./app/globals.css
+./app/layout.tsx
+ ⨯ ./app/globals.css
+Module parse failed: Unexpected character '@' (1:0)
+> @tailwind base;
+| @tailwind components;
+| @tailwind utilities;
+
+Import trace for requested module:
+./app/globals.css
+./app/layout.tsx
+ ⨯ Error: ENOENT: no such file or directory, open '/home/node/.openclaw/workspace/laundryco-scheduler/.next/fallback-build-manifest.json'
+    at readFileSync (node:fs:440:20)
+    at loadManifest (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/load-manifest.js:36:52)
+    at loadManifestWithRetries (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/load-components.js:40:51)
+    at async loadDefaultErrorComponentsImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/load-default-error-components.js:30:24)
+    at async DevServer.getFallbackErrorComponents (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/dev/next-dev-server.js:594:16)
+    at async DevServer.renderErrorToResponseImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/base-server.js:2203:40)
+    at async DevServer.pipeImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/next-server.js:231:21)
+    at async DevServer.handleRequestImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/base-server.js:818:17)
+    at async /home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/lib/router-server.js:179:21)
+    at async handleRequest (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/lib/router-server.js:359:24)
+    at async requestHandlerImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/lib/router-server.js:383:13)
+    at async Server.requestListener (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/lib/start-server.js:141:13) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/home/node/.openclaw/workspace/laundryco-scheduler/.next/fallback-build-manifest.json'
+}
+Error: ENOENT: no such file or directory, open '/home/node/.openclaw/workspace/laundryco-scheduler/.next/fallback-build-manifest.json'
+    at readFileSync (node:fs:440:20)
+    at loadManifest (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/load-manifest.js:36:52)
+    at loadManifestWithRetries (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/load-components.js:40:51)
+    at async loadDefaultErrorComponentsImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/load-default-error-components.js:30:24)
+    at async DevServer.getFallbackErrorComponents (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/dev/next-dev-server.js:594:16)
+    at async DevServer.renderErrorToResponseImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/base-server.js:2203:40)
+    at async DevServer.pipeImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/next-server.js:231:21)
+    at async DevServer.handleRequestImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/base-server.js:818:17)
+    at async /home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/lib/router-server.js:179:21)
+    at async handleRequest (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/lib/router-server.js:359:24)
+    at async requestHandlerImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/lib/router-server.js:383:13)
+    at async Server.requestListener (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/lib/start-server.js:141:13) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/home/node/.openclaw/workspace/laundryco-scheduler/.next/fallback-build-manifest.json'
+}
+Error: ENOENT: no such file or directory, open '/home/node/.openclaw/workspace/laundryco-scheduler/.next/fallback-build-manifest.json'
+    at readFileSync (node:fs:440:20)
+    at loadManifest (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/load-manifest.js:36:52)
+    at loadManifestWithRetries (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/load-components.js:40:51)
+    at async loadDefaultErrorComponentsImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/load-default-error-components.js:30:24)
+    at async DevServer.getFallbackErrorComponents (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/dev/next-dev-server.js:594:16)
+    at async DevServer.renderErrorToResponseImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/base-server.js:2203:40)
+    at async pipe.req.req (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/base-server.js:2056:30)
+    at async DevServer.pipeImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/base-server.js:922:25)
+    at async /home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/lib/router-server.js:179:21)
+    at async requestHandlerImpl (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/lib/router-server.js:395:24)
+    at async Server.requestListener (/home/node/.openclaw/workspace/laundryco-scheduler/node_modules/next/dist/server/lib/start-server.js:141:13) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/home/node/.openclaw/workspace/laundryco-scheduler/.next/fallback-build-manifest.json'
+}
