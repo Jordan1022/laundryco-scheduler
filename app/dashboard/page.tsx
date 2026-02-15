@@ -431,8 +431,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
+        <div className={cn('grid grid-cols-1 gap-8', selectedView === 'week' ? 'lg:grid-cols-1' : 'lg:grid-cols-3')}>
+          <div className={cn(selectedView === 'week' ? 'lg:col-span-1' : 'lg:col-span-2')}>
             <Card>
               <CardHeader className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -464,7 +464,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <div className="min-w-[720px]">
+                  <div className={cn(selectedView === 'week' ? 'min-w-0' : 'min-w-[720px]')}>
                     <div className="grid grid-cols-7 gap-2 mb-2">
                       {weekdayLabels.map((label) => (
                         <div key={label} className="text-xs font-semibold text-muted-foreground uppercase tracking-wide text-center py-1">
@@ -483,7 +483,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           <div
                             key={key}
                             className={cn(
-                              'min-h-28 rounded-md border p-2 bg-white',
+                              selectedView === 'week' ? 'min-h-44 rounded-md border p-3 bg-white' : 'min-h-28 rounded-md border p-2 bg-white',
                               selectedView === 'month' && !isCurrentMonth && 'bg-slate-50 text-slate-400',
                             )}
                           >
