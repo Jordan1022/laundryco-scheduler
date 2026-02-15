@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, Clock, Users } from 'lucide-react'
+import SignOutButton from '@/components/SignOutButton'
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -29,15 +30,7 @@ export default async function DashboardPage() {
             <span className="text-sm font-medium bg-slate-100 px-3 py-1 rounded-full">
               {role}
             </span>
-            <form
-              action={async () => {
-                'use server'
-                const { signOut } = await import('@/lib/auth')
-                await signOut({ redirectTo: '/auth/login' })
-              }}
-            >
-              <Button variant="outline" size="sm">Sign Out</Button>
-            </form>
+            <SignOutButton />
           </div>
         </div>
       </header>
