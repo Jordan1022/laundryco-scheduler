@@ -34,6 +34,7 @@ export const authOptions: NextAuthOptions = {
 
         const user = await db.select().from(users).where(eq(users.email, credentials.email as string)).then(res => res[0])
         if (!user || !user.hashedPassword) return null
+        if (user.role === 'inactive') return null
 
         const isValid = await bcrypt.compare(credentials.password as string, user.hashedPassword)
         if (!isValid) return null

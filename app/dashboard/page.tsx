@@ -3,12 +3,13 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { and, eq, gte, isNull, lt, ne, or } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { assignments, shifts, users } from '@/lib/schema'
+import { assignments, shiftSwapRequests, shifts, timeOffRequests, users } from '@/lib/schema'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, ChevronLeft, ChevronRight, Clock, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import SignOutButton from '@/components/SignOutButton'
+import { Input } from '@/components/ui/input'
 
 const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' })
@@ -22,6 +23,8 @@ type DashboardPageProps = {
   searchParams?: {
     view?: string | string[]
     date?: string | string[]
+    status?: string | string[]
+    error?: string | string[]
   }
 }
 
@@ -104,11 +107,151 @@ function formatHours(hours: number) {
   return Number.isInteger(hours) ? `${hours}` : hours.toFixed(1)
 }
 
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+async function requireAuthenticatedSession() {
   const session = await auth()
   if (!session?.user) {
     redirect('/auth/login')
   }
+  return session
+}
+
+function parseISODateOnly(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const date = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return null
+  return date
+}
+
+function buildDashboardReturnUrl(
+  view: DashboardView,
+  date: Date,
+  options?: {
+    status?: string
+    error?: string
+    hash?: string
+  },
+) {
+  const params = new URLSearchParams({
+    view,
+    date: formatDateParam(date),
+  })
+
+  if (options?.status) params.set('status', options.status)
+  if (options?.error) params.set('error', options.error)
+
+  const hash = options?.hash ? `#${options.hash}` : ''
+  return `/dashboard?${params.toString()}${hash}`
+}
+
+function getReturnContext(formData: FormData) {
+  const returnView = parseViewParam(String(formData.get('returnView') ?? ''))
+  const returnDate = toStartOfDay(parseDateParam(String(formData.get('returnDate') ?? '')))
+  return { returnView, returnDate }
+}
+
+async function requestTimeOffAction(formData: FormData) {
+  'use server'
+
+  const session = await requireAuthenticatedSession()
+  const { returnView, returnDate } = getReturnContext(formData)
+  const startDateRaw = String(formData.get('startDate') ?? '')
+  const endDateRaw = String(formData.get('endDate') ?? '')
+  const reason = String(formData.get('reason') ?? '').trim()
+
+  const startDate = parseISODateOnly(startDateRaw)
+  const endDate = parseISODateOnly(endDateRaw)
+  if (!startDate || !endDate || endDate < startDate) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'invalid-timeoff-dates', hash: 'request-time-off' }))
+  }
+
+  await db.insert(timeOffRequests).values({
+    userId: session.user.id,
+    startDate,
+    endDate,
+    reason: reason || null,
+    status: 'pending',
+  })
+
+  redirect(buildDashboardReturnUrl(returnView, returnDate, { status: 'timeoff-submitted', hash: 'request-time-off' }))
+}
+
+async function requestSwapAction(formData: FormData) {
+  'use server'
+
+  const session = await requireAuthenticatedSession()
+  const { returnView, returnDate } = getReturnContext(formData)
+  const assignmentId = String(formData.get('assignmentId') ?? '')
+  const requestedUserId = String(formData.get('requestedUserId') ?? '')
+
+  if (!assignmentId || !requestedUserId || requestedUserId === session.user.id) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'invalid-swap-request', hash: 'swap-shift' }))
+  }
+
+  const [assignmentRow] = await db.select({
+    assignmentId: assignments.id,
+    assignmentStatus: assignments.status,
+    assignmentUserId: assignments.userId,
+    shiftId: shifts.id,
+    shiftStatus: shifts.status,
+    shiftStart: shifts.startTime,
+  })
+    .from(assignments)
+    .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
+    .where(eq(assignments.id, assignmentId))
+    .limit(1)
+
+  if (
+    !assignmentRow ||
+    assignmentRow.assignmentUserId !== session.user.id ||
+    assignmentRow.assignmentStatus !== 'assigned' ||
+    assignmentRow.shiftStatus === 'cancelled' ||
+    assignmentRow.shiftStart < new Date()
+  ) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'invalid-swap-request', hash: 'swap-shift' }))
+  }
+
+  const [targetUser] = await db.select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, requestedUserId))
+    .limit(1)
+  if (!targetUser) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'invalid-swap-target', hash: 'swap-shift' }))
+  }
+
+  const existingPendingSwap = await db.select({ id: shiftSwapRequests.id })
+    .from(shiftSwapRequests)
+    .where(and(
+      eq(shiftSwapRequests.originalAssignmentId, assignmentId),
+      eq(shiftSwapRequests.status, 'pending'),
+    ))
+    .limit(1)
+  if (existingPendingSwap.length > 0) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'swap-already-pending', hash: 'swap-shift' }))
+  }
+
+  const conflictingAssignment = await db.select({ id: assignments.id })
+    .from(assignments)
+    .where(and(
+      eq(assignments.shiftId, assignmentRow.shiftId),
+      eq(assignments.userId, requestedUserId),
+      eq(assignments.status, 'assigned'),
+    ))
+    .limit(1)
+  if (conflictingAssignment.length > 0) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'swap-target-assigned', hash: 'swap-shift' }))
+  }
+
+  await db.insert(shiftSwapRequests).values({
+    originalAssignmentId: assignmentId,
+    requestedUserId,
+    status: 'pending',
+  })
+
+  redirect(buildDashboardReturnUrl(returnView, returnDate, { status: 'swap-submitted', hash: 'swap-shift' }))
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const session = await requireAuthenticatedSession()
 
   const { name, role } = session.user
   const selectedView = parseViewParam(getQueryValue(searchParams?.view))
@@ -123,7 +266,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const scheduleRangeStart = selectedView === 'month' ? calendarStart : selectedWeekStart
   const scheduleRangeEnd = selectedView === 'month' ? calendarEnd : selectedWeekEnd
 
-  const [scheduledShiftRows, upcomingShiftRows, thisWeekShiftRows, teamRows] = await Promise.all([
+  const [scheduledShiftRows, upcomingShiftRows, thisWeekShiftRows, swapEligibleRows, coworkerRows, teamRows] = await Promise.all([
     db.select({
       shiftId: shifts.id,
       title: shifts.title,
@@ -172,6 +315,31 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         lt(shifts.startTime, thisWeekEnd),
         or(isNull(shifts.status), ne(shifts.status, 'cancelled')),
       )),
+    db.select({
+      assignmentId: assignments.id,
+      shiftId: shifts.id,
+      title: shifts.title,
+      startTime: shifts.startTime,
+      endTime: shifts.endTime,
+      location: shifts.location,
+    })
+      .from(assignments)
+      .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
+      .where(and(
+        eq(assignments.userId, session.user.id),
+        eq(assignments.status, 'assigned'),
+        gte(shifts.startTime, now),
+        or(isNull(shifts.status), ne(shifts.status, 'cancelled')),
+      ))
+      .orderBy(shifts.startTime),
+    db.select({
+      id: users.id,
+      name: users.name,
+      role: users.role,
+    })
+      .from(users)
+      .where(and(ne(users.id, session.user.id), ne(users.role, 'inactive')))
+      .orderBy(users.name),
     db.select({ id: users.id }).from(users),
   ])
 
@@ -194,6 +362,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const upcomingShiftCount = upcomingShiftRows.length
   const thisWeekHours = thisWeekShiftRows.reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0)
   const teamCount = teamRows.length
+  const formStatus = getQueryValue(searchParams?.status)
+  const formError = getQueryValue(searchParams?.error)
 
   const prevAnchor = selectedView === 'month'
     ? new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, 1)
@@ -360,11 +530,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Button className="w-full" variant="outline">
-                  Request Time Off
+                <Button asChild className="w-full" variant="outline">
+                  <Link href="#request-time-off">Request Time Off</Link>
                 </Button>
-                <Button className="w-full" variant="outline">
-                  Swap a Shift
+                <Button asChild className="w-full" variant="outline">
+                  <Link href="#swap-shift">Swap a Shift</Link>
                 </Button>
                 <Button asChild className="w-full" variant="outline">
                   <Link href={buildDashboardLink('week', now)}>
@@ -376,6 +546,126 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <Link href="/admin#create-shift">Create New Shift</Link>
                   </Button>
                 ) : null}
+              </CardContent>
+            </Card>
+
+            <Card id="request-time-off">
+              <CardHeader>
+                <CardTitle>Request Time Off</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {formStatus === 'timeoff-submitted' ? (
+                  <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-800">
+                    Time-off request submitted for review.
+                  </div>
+                ) : null}
+                {formError === 'invalid-timeoff-dates' ? (
+                  <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
+                    End date must be on or after start date.
+                  </div>
+                ) : null}
+                <form action={requestTimeOffAction} className="space-y-3">
+                  <input type="hidden" name="returnView" value={selectedView} />
+                  <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                  <div className="space-y-1">
+                    <label htmlFor="startDate" className="text-sm font-medium">Start Date</label>
+                    <Input id="startDate" name="startDate" type="date" defaultValue={formatDateParam(now)} required />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="endDate" className="text-sm font-medium">End Date</label>
+                    <Input id="endDate" name="endDate" type="date" defaultValue={formatDateParam(now)} required />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="reason" className="text-sm font-medium">Reason (Optional)</label>
+                    <textarea
+                      id="reason"
+                      name="reason"
+                      rows={3}
+                      className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      placeholder="Vacation, appointment, personal day..."
+                    />
+                  </div>
+                  <Button type="submit" className="w-full bg-[#1e3a8a] hover:bg-[#172b6d]">
+                    Submit Time-Off Request
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card id="swap-shift">
+              <CardHeader>
+                <CardTitle>Swap a Shift</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {formStatus === 'swap-submitted' ? (
+                  <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-800">
+                    Swap request submitted for manager approval.
+                  </div>
+                ) : null}
+                {formError === 'invalid-swap-request' ? (
+                  <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
+                    Choose a valid future shift and teammate.
+                  </div>
+                ) : null}
+                {formError === 'invalid-swap-target' ? (
+                  <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
+                    The requested teammate could not be found.
+                  </div>
+                ) : null}
+                {formError === 'swap-already-pending' ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
+                    A pending swap request already exists for that shift.
+                  </div>
+                ) : null}
+                {formError === 'swap-target-assigned' ? (
+                  <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
+                    That teammate is already assigned to the selected shift.
+                  </div>
+                ) : null}
+
+                {swapEligibleRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No upcoming assigned shifts available to swap.</p>
+                ) : coworkerRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No teammates available to request a swap with.</p>
+                ) : (
+                  <form action={requestSwapAction} className="space-y-3">
+                    <input type="hidden" name="returnView" value={selectedView} />
+                    <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                    <div className="space-y-1">
+                      <label htmlFor="assignmentId" className="text-sm font-medium">Your Shift</label>
+                      <select
+                        id="assignmentId"
+                        name="assignmentId"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        required
+                      >
+                        {swapEligibleRows.map((assignment) => (
+                          <option key={assignment.assignmentId} value={assignment.assignmentId}>
+                            {shortDateLabel.format(assignment.startTime)} {shortTimeLabel.format(assignment.startTime)}-{shortTimeLabel.format(assignment.endTime)} · {assignment.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="requestedUserId" className="text-sm font-medium">Swap With</label>
+                      <select
+                        id="requestedUserId"
+                        name="requestedUserId"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        required
+                      >
+                        {coworkerRows.map((coworker) => (
+                          <option key={coworker.id} value={coworker.id}>
+                            {coworker.name} ({coworker.role})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <Button type="submit" className="w-full bg-[#1e3a8a] hover:bg-[#172b6d]">
+                      Submit Swap Request
+                    </Button>
+                  </form>
+                )}
               </CardContent>
             </Card>
 
