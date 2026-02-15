@@ -524,7 +524,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </CardContent>
             </Card>
           </div>
-          <div className="space-y-6">
+          <div className={cn(selectedView === 'week' ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'space-y-6')}>
             <Card>
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
