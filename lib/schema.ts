@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, boolean, integer, jsonb } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, boolean, integer, jsonb, unique } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 // Users: employees & managers
@@ -120,8 +120,3 @@ export const auditLog = pgTable('audit_log', {
   metadata: jsonb('metadata'),
   createdAt: timestamp('created_at').defaultNow(),
 })
-
-// Helper for unique constraint
-function unique(name: string) {
-  return { name }
-}
