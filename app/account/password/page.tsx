@@ -86,8 +86,8 @@ export default async function PasswordPage({ searchParams }: PasswordPageProps) 
   const formError = getQueryValue(searchParams?.error)
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b">
+    <div className="min-h-screen bg-background">
+      <header className="bg-card border-b">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-[#1e3a8a] flex items-center justify-center">

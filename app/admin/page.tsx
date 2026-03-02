@@ -1188,8 +1188,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="bg-white border-b">
+    <div className="min-h-screen bg-background">
+      <header className="bg-card border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-3">
             <div className="h-10 w-10 rounded-full bg-[#1e3a8a] flex items-center justify-center">

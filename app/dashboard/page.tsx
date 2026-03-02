@@ -463,8 +463,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     : `${monthDayLabel.format(selectedWeekStart)} - ${monthDayLabel.format(addDays(selectedWeekEnd, -1))}`
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b">
+    <div className="min-h-screen bg-background">
+      <header className="bg-card border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start sm:items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-[#1e3a8a] flex items-center justify-center">
