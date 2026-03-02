@@ -7,7 +7,7 @@ import { notifications } from '@/lib/schema'
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
+  if (!session?.user?.id || session.user.role === 'inactive') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

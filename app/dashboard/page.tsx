@@ -116,7 +116,7 @@ function formatShiftDateTime(start: Date, end: Date) {
 
 async function requireAuthenticatedSession() {
   const session = await auth()
-  if (!session?.user) {
+  if (!session?.user || !session.user.id || session.user.role === 'inactive') {
     redirect('/auth/login')
   }
   return session
@@ -221,7 +221,7 @@ async function requestSwapAction(formData: FormData) {
     !assignmentRow ||
     assignmentRow.assignmentUserId !== session.user.id ||
     assignmentRow.assignmentStatus !== 'assigned' ||
-    assignmentRow.shiftStatus === 'cancelled' ||
+    (assignmentRow.shiftStatus !== 'published' && assignmentRow.shiftStatus !== null) ||
     assignmentRow.shiftStart < new Date()
   ) {
     redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'invalid-swap-request', hash: 'swap-shift' }))
@@ -229,7 +229,7 @@ async function requestSwapAction(formData: FormData) {
 
   const [targetUser] = await db.select({ id: users.id, name: users.name })
     .from(users)
-    .where(eq(users.id, requestedUserId))
+    .where(and(eq(users.id, requestedUserId), ne(users.role, 'inactive')))
     .limit(1)
   if (!targetUser) {
     redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'invalid-swap-target', hash: 'swap-shift' }))
@@ -349,7 +349,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         eq(assignments.status, 'assigned'),
         gte(shifts.startTime, scheduleRangeStart),
         lt(shifts.startTime, scheduleRangeEnd),
-        or(isNull(shifts.status), ne(shifts.status, 'cancelled')),
+        or(isNull(shifts.status), eq(shifts.status, 'published')),
       ))
       .orderBy(shifts.startTime),
     db.select({
@@ -366,7 +366,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         eq(assignments.status, 'assigned'),
         gte(shifts.startTime, now),
         lt(shifts.startTime, nextSevenDays),
-        or(isNull(shifts.status), ne(shifts.status, 'cancelled')),
+        or(isNull(shifts.status), eq(shifts.status, 'published')),
       ))
       .orderBy(shifts.startTime),
     db.select({
@@ -381,7 +381,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         eq(assignments.status, 'assigned'),
         gte(shifts.startTime, thisWeekStart),
         lt(shifts.startTime, thisWeekEnd),
-        or(isNull(shifts.status), ne(shifts.status, 'cancelled')),
+        or(isNull(shifts.status), eq(shifts.status, 'published')),
       )),
     db.select({
       assignmentId: assignments.id,
@@ -397,7 +397,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         eq(assignments.userId, session.user.id),
         eq(assignments.status, 'assigned'),
         gte(shifts.startTime, now),
-        or(isNull(shifts.status), ne(shifts.status, 'cancelled')),
+        or(isNull(shifts.status), eq(shifts.status, 'published')),
       ))
       .orderBy(shifts.startTime),
     db.select({

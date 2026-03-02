@@ -51,6 +51,32 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user }) {
+      const tokenUserId = (token.id as string | undefined) ?? token.sub
+
+      if (tokenUserId) {
+        const dbUser = await db.select({
+          id: users.id,
+          role: users.role,
+          phone: users.phone,
+        })
+          .from(users)
+          .where(eq(users.id, tokenUserId))
+          .limit(1)
+          .then((rows) => rows[0])
+
+        if (!dbUser || dbUser.role === 'inactive') {
+          delete token.sub
+          delete token.id
+          delete token.role
+          delete token.phone
+          return token
+        }
+
+        token.id = dbUser.id
+        token.role = dbUser.role
+        token.phone = dbUser.phone ?? undefined
+      }
+
       if (user) {
         token.id = user.id
         token.role = user.role
@@ -60,9 +86,9 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string
-        session.user.role = token.role as string
-        session.user.phone = token.phone as string
+        session.user.id = (token.id as string | undefined) ?? ''
+        session.user.role = (token.role as string | undefined) ?? 'inactive'
+        session.user.phone = token.phone as string | undefined
       }
       return session
     },

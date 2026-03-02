@@ -334,6 +334,53 @@ async function setShiftCancelledAction(formData: FormData) {
   redirect(`/admin?status=${mode === 'cancel' ? 'shift-cancelled' : 'shift-restored'}#upcoming-shifts`)
 }
 
+async function publishScheduleAction() {
+  'use server'
+
+  await requireManagerSession()
+
+  const now = new Date()
+  const publishedRows = await db.update(shifts).set({
+    status: 'published',
+    updatedAt: new Date(),
+  })
+    .where(and(eq(shifts.status, 'draft'), gte(shifts.startTime, now)))
+    .returning({
+      id: shifts.id,
+      title: shifts.title,
+      startTime: shifts.startTime,
+      endTime: shifts.endTime,
+    })
+
+  if (publishedRows.length === 0) {
+    redirect('/admin?status=schedule-no-drafts#create-shift')
+  }
+
+  const publishedShiftIds = publishedRows.map((row) => row.id)
+  const assignmentsForPublishedRows = await db.select({
+    shiftId: assignments.shiftId,
+    userId: assignments.userId,
+  })
+    .from(assignments)
+    .where(and(inArray(assignments.shiftId, publishedShiftIds), eq(assignments.status, 'assigned')))
+
+  if (assignmentsForPublishedRows.length > 0) {
+    const shiftById = new Map(publishedRows.map((row) => [row.id, row]))
+    await notifyUsers(assignmentsForPublishedRows.flatMap((row) => {
+      const shift = shiftById.get(row.shiftId)
+      if (!shift) return []
+      return [{
+        userId: row.userId,
+        title: 'Shift published',
+        body: `${shift.title} was published for ${formatShiftDateTime(shift.startTime, shift.endTime)}.`,
+        link: '/dashboard',
+      }]
+    }))
+  }
+
+  redirect('/admin?status=schedule-published#create-shift')
+}
+
 async function createStaffAction(formData: FormData) {
   'use server'
 
@@ -381,7 +428,7 @@ async function createStaffAction(formData: FormData) {
     {
       userId: createdUserId,
       title: 'Your Laundry Co. Scheduler account is ready',
-      body: `Sign in with email ${email} and temporary password: ${password}`,
+      body: `Sign in with email ${email}. Your manager will share your temporary password securely.`,
       link: '/auth/login',
     },
   ])
@@ -515,7 +562,7 @@ async function resetStaffPasswordAction(formData: FormData) {
     {
       userId,
       title: 'Your password was reset',
-      body: `Use this temporary password to sign in: ${password}`,
+      body: 'Your manager has reset your password and will share your temporary password securely.',
       link: '/auth/login',
     },
   ])
@@ -615,7 +662,7 @@ async function reviewSwapAction(formData: FormData) {
     redirect('/admin?status=swap-denied#requests')
   }
 
-  let swapApproveResult: 'approved' | 'swap-not-found' | 'assignment-not-found' | 'swap-conflict' = 'approved'
+  let swapApproveResult: 'approved' | 'swap-not-found' | 'assignment-not-found' | 'swap-conflict' | 'swap-target-inactive' = 'approved'
 
   try {
     await db.transaction(async (tx) => {
@@ -641,6 +688,15 @@ async function reviewSwapAction(formData: FormData) {
 
       if (!assignment) throw new Error('assignment-not-found')
 
+      const [requestedUser] = await tx.select({
+        id: users.id,
+      })
+        .from(users)
+        .where(and(eq(users.id, swap.requestedUserId), ne(users.role, 'inactive')))
+        .limit(1)
+
+      if (!requestedUser) throw new Error('swap-target-inactive')
+
       if (assignment.userId !== swap.requestedUserId) {
         const conflictingAssignment = await tx.select({ id: assignments.id })
           .from(assignments)
@@ -665,7 +721,8 @@ async function reviewSwapAction(formData: FormData) {
     if (error instanceof Error && (
       error.message === 'swap-not-found' ||
       error.message === 'assignment-not-found' ||
-      error.message === 'swap-conflict'
+      error.message === 'swap-conflict' ||
+      error.message === 'swap-target-inactive'
     )) {
       swapApproveResult = error.message
     } else {
@@ -938,10 +995,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 Review Requests
               </Link>
             </Button>
-            <Button className="justify-start" variant="outline">
-              <CalendarDays className="mr-2 h-4 w-4" />
-              Publish Schedule
-            </Button>
+            <form action={publishScheduleAction}>
+              <Button type="submit" className="justify-start w-full" variant="outline">
+                <CalendarDays className="mr-2 h-4 w-4" />
+                Publish Schedule
+              </Button>
+            </form>
           </CardContent>
         </Card>
 
@@ -953,6 +1012,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             {formStatus === 'shift-created' ? (
               <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
                 Shift created successfully.
+              </div>
+            ) : null}
+            {formStatus === 'schedule-published' ? (
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                Draft shifts were published.
+              </div>
+            ) : null}
+            {formStatus === 'schedule-no-drafts' ? (
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                No future draft shifts were available to publish.
               </div>
             ) : null}
             {formError === 'missing-fields' ? (
@@ -1313,6 +1382,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           {formError === 'swap-conflict' ? (
             <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
               Requested staff is already assigned to that shift.
+            </div>
+          ) : null}
+          {formError === 'swap-target-inactive' ? (
+            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+              Requested staff is inactive and cannot receive this shift.
             </div>
           ) : null}
 
