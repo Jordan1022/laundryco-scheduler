@@ -1,39 +1,46 @@
 #!/bin/bash
-# push-to-github.sh - Create repo and push Laundry Co. Scheduler
+# push-to-github.sh - Initialize this project repo and print push steps
 
-set -e
+set -euo pipefail
 
-echo "🧺 Preparing Laundry Co. Scheduler for GitHub..."
+PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$PROJECT_ROOT"
 
-# Initialize git
-cd laundryco-scheduler
-git init
+echo "Preparing Laundry Co. Scheduler for GitHub..."
+
+if [ ! -d .git ]; then
+  git init
+fi
+
 git add .
-git commit -m "Initial commit: Laundry Co. Employee Shift Scheduler"
+
+if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+  git commit -m "Initial commit: Laundry Co. Employee Shift Scheduler"
+else
+  echo "Repository already has commits; skipping initial commit."
+fi
 
 echo ""
-echo "✅ Local repo ready."
+echo "Local repo is ready."
 echo ""
-echo "Next steps manually:"
-echo "1. Go to https://github.com/new"
-echo "2. Create repo named 'laundryco-scheduler' (private recommended)"
-echo "3. Run these commands:"
-echo ""
-echo "   git remote add origin https://github.com/your-username/laundryco-scheduler.git"
+echo "Next steps:"
+echo "1. Create a new GitHub repository named 'laundryco-scheduler'"
+echo "2. Run:"
+echo "   git remote add origin https://github.com/<your-username>/laundryco-scheduler.git"
 echo "   git branch -M main"
 echo "   git push -u origin main"
 echo ""
-echo "4. Deploy to Vercel:"
-echo "   vercel --prod"
-echo ""
-echo "Your scheduler will be live at your custom subdomain."
-echo ""
-echo "Environment variables needed:"
-echo "   DATABASE_URL"
-echo "   NEXTAUTH_SECRET"
-echo "   NEXTAUTH_URL"
-echo "   TWILIO_ACCOUNT_SID"
-echo "   TWILIO_AUTH_TOKEN"
-echo "   TWILIO_PHONE_NUMBER"
-echo ""
-echo "Need help? I'm here."
+echo "Environment variables:"
+echo "  Required:"
+echo "    DATABASE_URL"
+echo "    NEXTAUTH_SECRET"
+echo "    NEXTAUTH_URL"
+echo "    APP_BASE_URL"
+echo "  Notifications:"
+echo "    RESEND_API_KEY"
+echo "    RESEND_FROM_EMAIL"
+echo "  Browser push (optional):"
+echo "    NEXT_PUBLIC_VAPID_PUBLIC_KEY"
+echo "    VAPID_PUBLIC_KEY"
+echo "    VAPID_PRIVATE_KEY"
+echo "    VAPID_SUBJECT"

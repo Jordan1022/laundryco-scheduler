@@ -1,7 +1,7 @@
 # Laundry Co. Shift Scheduler
 
 Modern employee shift‑scheduling app for Laundry Co.  
-Managers create shifts, assign employees; employees view schedules, request time off/swap.  
+Managers create shifts, assign employees, and publish drafts; employees view schedules, request time off/swap.  
 In-app + email notifications via Resend.
 
 **Domain:** `schedule.laundryco.example.com`  
@@ -18,18 +18,18 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Features
 
-- **Calendar views**: Daily, weekly, monthly (30‑min intervals)
-- **Shift management**: Create, assign, edit, delete shifts
+- **Calendar views**: Weekly and monthly
+- **Shift management**: Create, assign, edit, cancel/restore, and publish draft shifts
 - **Employee portal**: View shifts, request time off, swap shifts
 - **Notification center**: In-app alerts for shift updates and request decisions
 - **Browser push notifications**: Service-worker push alerts for supported web browsers
-- **Manager admin**: Dashboard, bulk actions, approval workflows
+- **Manager admin**: Operations dashboard and approval workflows
 - **Email notifications**: Resend-powered transactional alerts
 - **Role‑based access**: Employee, Manager, Admin
 
 ## Tech Stack
 
-- **Next.js 15** – App Router, React Server Components
+- **Next.js 14** – App Router, React Server Components
 - **Tailwind CSS** – Styling
 - **shadcn/ui** – Component library
 - **PostgreSQL** – Vercel Postgres
