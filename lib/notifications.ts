@@ -75,11 +75,19 @@ export async function notifyUsers(entries: NotifyUserInput[]) {
 
     if (user?.email) {
       try {
-        await sendEmailWithResend({
+        const emailResult = await sendEmailWithResend({
           to: user.email,
           subject: entry.title,
           text: emailText(entry.title, entry.body, link),
         })
+        if (!emailResult.sent && emailResult.reason === 'missing-config') {
+          console.warn('Email notification skipped due to missing Resend config', {
+            userId: entry.userId,
+            title: entry.title,
+            hasApiKey: emailResult.hasApiKey,
+            hasFromEmail: emailResult.hasFromEmail,
+          })
+        }
       } catch (error) {
         console.error('Failed to send notification email', {
           userId: entry.userId,
