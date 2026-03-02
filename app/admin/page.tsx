@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { CalendarDays, CalendarPlus, CheckSquare, UserPlus, Users } from 'lucide-react'
 import SignOutButton from '@/components/SignOutButton'
 import bcrypt from 'bcryptjs'
+import { notifyUsers } from '@/lib/notifications'
 
 const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 const timeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' })
@@ -34,6 +35,10 @@ function getWeekBounds(base: Date) {
 
 function formatHours(hours: number) {
   return Number.isInteger(hours) ? `${hours}` : hours.toFixed(1)
+}
+
+function formatShiftDateTime(start: Date, end: Date) {
+  return `${dateTimeLabel.format(start)} - ${timeLabel.format(end)}`
 }
 
 function rolePill(role: string) {
@@ -129,6 +134,7 @@ async function createShiftAction(formData: FormData) {
     createdBy: session.user.id,
   }).returning({ id: shifts.id })
 
+  let assignmentCreatedForUserId: string | null = null
   if (assignedUserId) {
     const userExists = await db.select({ id: users.id })
       .from(users)
@@ -141,7 +147,19 @@ async function createShiftAction(formData: FormData) {
         userId: assignedUserId,
         status: 'assigned',
       })
+      assignmentCreatedForUserId = assignedUserId
     }
+  }
+
+  if (assignmentCreatedForUserId && status !== 'draft') {
+    await notifyUsers([
+      {
+        userId: assignmentCreatedForUserId,
+        title: 'New shift assigned',
+        body: `${title} on ${formatShiftDateTime(startDateTime, endDateTime)}.`,
+        link: '/dashboard',
+      },
+    ])
   }
 
   redirect('/admin?status=shift-created#create-shift')
@@ -200,6 +218,7 @@ async function updateShiftAction(formData: FormData) {
   })
     .from(assignments)
     .where(and(eq(assignments.shiftId, shiftId), eq(assignments.status, 'assigned')))
+  const previousAssignedUserIds = [...new Set(existingAssignedRows.map((row) => row.userId))]
 
   if (assignedUserId) {
     const matchingUser = await db.select({ id: users.id })
@@ -241,6 +260,30 @@ async function updateShiftAction(formData: FormData) {
     await db.delete(assignments).where(inArray(assignments.id, existingAssignedRows.map((row) => row.id)))
   }
 
+  const currentAssignedRows = await db.select({ userId: assignments.userId })
+    .from(assignments)
+    .where(and(eq(assignments.shiftId, shiftId), eq(assignments.status, 'assigned')))
+  const currentAssignedUserIds = [...new Set(currentAssignedRows.map((row) => row.userId))]
+
+  if (currentAssignedUserIds.length > 0 && status !== 'draft') {
+    await notifyUsers(currentAssignedUserIds.map((userId) => ({
+      userId,
+      title: status === 'cancelled' ? 'Shift cancelled' : 'Shift updated',
+      body: `${title} is now ${status}. ${formatShiftDateTime(startDateTime, endDateTime)}.`,
+      link: '/dashboard',
+    })))
+  }
+
+  const removedUserIds = previousAssignedUserIds.filter((userId) => !currentAssignedUserIds.includes(userId))
+  if (removedUserIds.length > 0) {
+    await notifyUsers(removedUserIds.map((userId) => ({
+      userId,
+      title: 'Shift unassigned',
+      body: `You were removed from ${title} on ${formatShiftDateTime(startDateTime, endDateTime)}.`,
+      link: '/dashboard',
+    })))
+  }
+
   redirect('/admin?status=shift-updated#upcoming-shifts')
 }
 
@@ -256,6 +299,17 @@ async function setShiftCancelledAction(formData: FormData) {
     redirect('/admin?error=invalid-shift#upcoming-shifts')
   }
 
+  const [shiftRow] = await db.select({
+    id: shifts.id,
+    title: shifts.title,
+    startTime: shifts.startTime,
+    endTime: shifts.endTime,
+  }).from(shifts).where(eq(shifts.id, shiftId)).limit(1)
+
+  const assignedRows = await db.select({ userId: assignments.userId })
+    .from(assignments)
+    .where(and(eq(assignments.shiftId, shiftId), eq(assignments.status, 'assigned')))
+
   const status = mode === 'cancel' ? 'cancelled' : 'published'
   const updatedShift = await db.update(shifts).set({
     status,
@@ -266,6 +320,15 @@ async function setShiftCancelledAction(formData: FormData) {
 
   if (updatedShift.length === 0) {
     redirect('/admin?error=invalid-shift#upcoming-shifts')
+  }
+
+  if (shiftRow && assignedRows.length > 0) {
+    await notifyUsers(assignedRows.map((row) => ({
+      userId: row.userId,
+      title: mode === 'cancel' ? 'Shift cancelled' : 'Shift restored',
+      body: `${shiftRow.title} (${formatShiftDateTime(shiftRow.startTime, shiftRow.endTime)}) has been ${mode === 'cancel' ? 'cancelled' : 'restored'}.`,
+      link: '/dashboard',
+    })))
   }
 
   redirect(`/admin?status=${mode === 'cancel' ? 'shift-cancelled' : 'shift-restored'}#upcoming-shifts`)
@@ -297,20 +360,31 @@ async function createStaffAction(formData: FormData) {
 
   const hashedPassword = await bcrypt.hash(password, 10)
 
+  let createdUserId = ''
   try {
-    await db.insert(users).values({
+    const [createdUser] = await db.insert(users).values({
       name,
       email,
       phone: phone || null,
       role,
       hashedPassword,
-    })
+    }).returning({ id: users.id })
+    createdUserId = createdUser.id
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
       redirect('/admin?error=staff-email-exists#staff-management')
     }
     throw error
   }
+
+  await notifyUsers([
+    {
+      userId: createdUserId,
+      title: 'Your Laundry Co. Scheduler account is ready',
+      body: `Sign in with email ${email} and temporary password: ${password}`,
+      link: '/auth/login',
+    },
+  ])
 
   redirect('/admin?status=staff-created#staff-management')
 }
@@ -437,6 +511,15 @@ async function resetStaffPasswordAction(formData: FormData) {
     updatedAt: new Date(),
   }).where(eq(users.id, userId))
 
+  await notifyUsers([
+    {
+      userId,
+      title: 'Your password was reset',
+      body: `Use this temporary password to sign in: ${password}`,
+      link: '/auth/login',
+    },
+  ])
+
   redirect('/admin?status=staff-password-reset#staff-management')
 }
 
@@ -458,11 +541,26 @@ async function reviewTimeOffAction(formData: FormData) {
     reviewedAt: new Date(),
   })
     .where(and(eq(timeOffRequests.id, requestId), eq(timeOffRequests.status, 'pending')))
-    .returning({ id: timeOffRequests.id })
+    .returning({
+      id: timeOffRequests.id,
+      userId: timeOffRequests.userId,
+      startDate: timeOffRequests.startDate,
+      endDate: timeOffRequests.endDate,
+    })
 
   if (reviewed.length === 0) {
     redirect('/admin?error=request-not-found#requests')
   }
+
+  const [{ userId, startDate, endDate }] = reviewed
+  await notifyUsers([
+    {
+      userId,
+      title: `Time-off ${nextStatus}`,
+      body: `Your time-off request (${dateLabel.format(startDate)} to ${dateLabel.format(endDate)}) was ${nextStatus}.`,
+      link: '/dashboard#request-time-off',
+    },
+  ])
 
   redirect(`/admin?status=timeoff-${nextStatus}#requests`)
 }
@@ -478,6 +576,25 @@ async function reviewSwapAction(formData: FormData) {
     redirect('/admin?error=invalid-review#requests')
   }
 
+  const [swapSummary] = await db.select({
+    swapId: shiftSwapRequests.id,
+    assignmentId: shiftSwapRequests.originalAssignmentId,
+    requestedUserId: shiftSwapRequests.requestedUserId,
+    originalUserId: assignments.userId,
+    shiftTitle: shifts.title,
+    shiftStart: shifts.startTime,
+    shiftEnd: shifts.endTime,
+  })
+    .from(shiftSwapRequests)
+    .innerJoin(assignments, eq(shiftSwapRequests.originalAssignmentId, assignments.id))
+    .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
+    .where(eq(shiftSwapRequests.id, swapId))
+    .limit(1)
+
+  if (!swapSummary) {
+    redirect('/admin?error=swap-not-found#requests')
+  }
+
   if (decision === 'deny') {
     const denied = await db.update(shiftSwapRequests).set({ status: 'denied' })
       .where(and(eq(shiftSwapRequests.id, swapId), eq(shiftSwapRequests.status, 'pending')))
@@ -486,6 +603,14 @@ async function reviewSwapAction(formData: FormData) {
     if (denied.length === 0) {
       redirect('/admin?error=swap-not-found#requests')
     }
+
+    const usersToNotify = [...new Set([swapSummary.originalUserId, swapSummary.requestedUserId])]
+    await notifyUsers(usersToNotify.map((userId) => ({
+      userId,
+      title: 'Swap request denied',
+      body: `Swap request for ${swapSummary.shiftTitle} (${formatShiftDateTime(swapSummary.shiftStart, swapSummary.shiftEnd)}) was denied.`,
+      link: '/dashboard#swap-shift',
+    })))
 
     redirect('/admin?status=swap-denied#requests')
   }
@@ -551,6 +676,21 @@ async function reviewSwapAction(formData: FormData) {
   if (swapApproveResult !== 'approved') {
     redirect(`/admin?error=${swapApproveResult}#requests`)
   }
+
+  await notifyUsers([
+    {
+      userId: swapSummary.originalUserId,
+      title: 'Swap request approved',
+      body: `Your swap for ${swapSummary.shiftTitle} (${formatShiftDateTime(swapSummary.shiftStart, swapSummary.shiftEnd)}) was approved.`,
+      link: '/dashboard#swap-shift',
+    },
+    {
+      userId: swapSummary.requestedUserId,
+      title: 'You are now assigned to a swapped shift',
+      body: `${swapSummary.shiftTitle} (${formatShiftDateTime(swapSummary.shiftStart, swapSummary.shiftEnd)}) was assigned to you.`,
+      link: '/dashboard',
+    },
+  ])
 
   redirect('/admin?status=swap-approved#requests')
 }

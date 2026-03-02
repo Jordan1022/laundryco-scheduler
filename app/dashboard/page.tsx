@@ -1,21 +1,24 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { and, eq, gte, isNull, lt, ne, or } from 'drizzle-orm'
+import { and, count, desc, eq, gte, isNull, lt, ne, or } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { assignments, shiftSwapRequests, shifts, timeOffRequests, users } from '@/lib/schema'
+import { assignments, notifications, shiftSwapRequests, shifts, timeOffRequests, users } from '@/lib/schema'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, ChevronLeft, ChevronRight, Clock, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import SignOutButton from '@/components/SignOutButton'
 import { Input } from '@/components/ui/input'
+import BrowserAlertToggle from '@/components/BrowserAlertToggle'
+import { markAllNotificationsRead, markNotificationRead, notifyRoles, notifyUsers } from '@/lib/notifications'
 
 const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' })
 const monthDayLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
 const shortDateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 const shortTimeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' })
+const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
 type DashboardView = 'week' | 'month'
 
@@ -107,6 +110,10 @@ function formatHours(hours: number) {
   return Number.isInteger(hours) ? `${hours}` : hours.toFixed(1)
 }
 
+function formatShiftDateTime(start: Date, end: Date) {
+  return `${dateTimeLabel.format(start)} - ${shortTimeLabel.format(end)}`
+}
+
 async function requireAuthenticatedSession() {
   const session = await auth()
   if (!session?.user) {
@@ -172,6 +179,14 @@ async function requestTimeOffAction(formData: FormData) {
     status: 'pending',
   })
 
+  const requestedDateRange = `${shortDateLabel.format(startDate)} to ${shortDateLabel.format(endDate)}`
+  await notifyRoles({
+    roles: ['manager', 'admin'],
+    title: `Time-off request from ${session.user.name}`,
+    body: `${session.user.name} requested ${requestedDateRange}${reason ? ` (${reason})` : ''}.`,
+    link: '/admin#requests',
+  })
+
   redirect(buildDashboardReturnUrl(returnView, returnDate, { status: 'timeoff-submitted', hash: 'request-time-off' }))
 }
 
@@ -192,8 +207,10 @@ async function requestSwapAction(formData: FormData) {
     assignmentStatus: assignments.status,
     assignmentUserId: assignments.userId,
     shiftId: shifts.id,
+    shiftTitle: shifts.title,
     shiftStatus: shifts.status,
     shiftStart: shifts.startTime,
+    shiftEnd: shifts.endTime,
   })
     .from(assignments)
     .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
@@ -210,7 +227,7 @@ async function requestSwapAction(formData: FormData) {
     redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'invalid-swap-request', hash: 'swap-shift' }))
   }
 
-  const [targetUser] = await db.select({ id: users.id })
+  const [targetUser] = await db.select({ id: users.id, name: users.name })
     .from(users)
     .where(eq(users.id, requestedUserId))
     .limit(1)
@@ -247,7 +264,49 @@ async function requestSwapAction(formData: FormData) {
     status: 'pending',
   })
 
+  const shiftSummary = `${assignmentRow.shiftTitle} (${formatShiftDateTime(assignmentRow.shiftStart, assignmentRow.shiftEnd)})`
+  await notifyUsers([
+    {
+      userId: requestedUserId,
+      title: 'New swap request',
+      body: `${session.user.name} requested to swap: ${shiftSummary}.`,
+      link: '/dashboard#swap-shift',
+    },
+  ])
+
+  await notifyRoles({
+    roles: ['manager', 'admin'],
+    title: `Swap request from ${session.user.name}`,
+    body: `${session.user.name} requested a swap with ${targetUser.name} for ${shiftSummary}.`,
+    link: '/admin#requests',
+  })
+
   redirect(buildDashboardReturnUrl(returnView, returnDate, { status: 'swap-submitted', hash: 'swap-shift' }))
+}
+
+async function markNotificationReadAction(formData: FormData) {
+  'use server'
+
+  const session = await requireAuthenticatedSession()
+  const notificationId = String(formData.get('notificationId') ?? '')
+  const { returnView, returnDate } = getReturnContext(formData)
+
+  if (!notificationId) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { hash: 'notifications' }))
+  }
+
+  await markNotificationRead(session.user.id, notificationId)
+  redirect(buildDashboardReturnUrl(returnView, returnDate, { hash: 'notifications' }))
+}
+
+async function markAllNotificationsReadAction(formData: FormData) {
+  'use server'
+
+  const session = await requireAuthenticatedSession()
+  const { returnView, returnDate } = getReturnContext(formData)
+
+  await markAllNotificationsRead(session.user.id)
+  redirect(buildDashboardReturnUrl(returnView, returnDate, { hash: 'notifications' }))
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
@@ -266,7 +325,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const scheduleRangeStart = selectedView === 'month' ? calendarStart : selectedWeekStart
   const scheduleRangeEnd = selectedView === 'month' ? calendarEnd : selectedWeekEnd
 
-  const [scheduledShiftRows, upcomingShiftRows, thisWeekShiftRows, swapEligibleRows, coworkerRows, teamRows] = await Promise.all([
+  const [
+    scheduledShiftRows,
+    upcomingShiftRows,
+    thisWeekShiftRows,
+    swapEligibleRows,
+    coworkerRows,
+    teamRows,
+    notificationRows,
+    unreadNotificationsCountRow,
+  ] = await Promise.all([
     db.select({
       shiftId: shifts.id,
       title: shifts.title,
@@ -341,6 +409,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .where(and(ne(users.id, session.user.id), ne(users.role, 'inactive')))
       .orderBy(users.name),
     db.select({ id: users.id }).from(users),
+    db.select({
+      id: notifications.id,
+      title: notifications.title,
+      body: notifications.body,
+      link: notifications.link,
+      isRead: notifications.isRead,
+      createdAt: notifications.createdAt,
+    })
+      .from(notifications)
+      .where(eq(notifications.userId, session.user.id))
+      .orderBy(desc(notifications.createdAt))
+      .limit(12),
+    db.select({ value: count() })
+      .from(notifications)
+      .where(and(eq(notifications.userId, session.user.id), eq(notifications.isRead, false)))
+      .then((rows) => rows[0]),
   ])
 
   const shiftsByDay = new Map<string, typeof scheduledShiftRows>()
@@ -362,8 +446,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const upcomingShiftCount = upcomingShiftRows.length
   const thisWeekHours = thisWeekShiftRows.reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0)
   const teamCount = teamRows.length
+  const unreadNotificationsCount = unreadNotificationsCountRow?.value ?? 0
   const formStatus = getQueryValue(searchParams?.status)
   const formError = getQueryValue(searchParams?.error)
+  const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || ''
 
   const prevAnchor = selectedView === 'month'
     ? new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, 1)
@@ -525,6 +611,65 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </Card>
           </div>
           <div className={cn(selectedView === 'week' ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'space-y-6')}>
+            <Card id="notifications">
+              <CardHeader className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle>Notifications</CardTitle>
+                  <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium">
+                    {unreadNotificationsCount} unread
+                  </span>
+                </div>
+                <BrowserAlertToggle vapidPublicKey={vapidPublicKey} />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {notificationRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No notifications yet.</p>
+                ) : (
+                  <>
+                    {unreadNotificationsCount > 0 ? (
+                      <form action={markAllNotificationsReadAction} className="flex justify-end">
+                        <input type="hidden" name="returnView" value={selectedView} />
+                        <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                        <Button type="submit" size="sm" variant="outline">Mark All Read</Button>
+                      </form>
+                    ) : null}
+                    <div className="space-y-2">
+                      {notificationRows.map((notification) => (
+                        <div
+                          key={notification.id}
+                          className={cn(
+                            'rounded-md border p-3 space-y-2',
+                            notification.isRead ? 'bg-white' : 'bg-blue-50 border-blue-200',
+                          )}
+                        >
+                          <div className="space-y-1">
+                            <p className="text-sm font-semibold">{notification.title}</p>
+                            <p className="text-sm text-muted-foreground">{notification.body}</p>
+                            <p className="text-xs text-muted-foreground">{dateTimeLabel.format(notification.createdAt)}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            {notification.link ? (
+                              <Button asChild size="sm" variant="outline">
+                                <Link href={notification.link}>Open</Link>
+                              </Button>
+                            ) : null}
+                            {!notification.isRead ? (
+                              <form action={markNotificationReadAction}>
+                                <input type="hidden" name="notificationId" value={notification.id} />
+                                <input type="hidden" name="returnView" value={selectedView} />
+                                <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                                <Button type="submit" size="sm" variant="outline">Mark Read</Button>
+                              </form>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
