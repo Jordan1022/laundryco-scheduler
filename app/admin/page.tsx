@@ -577,6 +577,7 @@ async function createStaffAction(formData: FormData) {
       phone: phone || null,
       role,
       hashedPassword,
+      passwordChangedAt: new Date(),
     }).returning({ id: users.id })
     createdUserId = createdUser.id
   } catch (error) {
@@ -829,6 +830,7 @@ async function resetStaffPasswordAction(formData: FormData) {
 
   await db.update(users).set({
     hashedPassword,
+    passwordChangedAt: new Date(),
     updatedAt: new Date(),
   }).where(eq(users.id, userId))
 

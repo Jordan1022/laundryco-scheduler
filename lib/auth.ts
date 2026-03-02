@@ -11,6 +11,7 @@ declare module 'next-auth' {
     id: string
     role: string
     phone?: string
+    passwordChangedAt?: string
   }
   interface Session {
     user: User & {
@@ -45,19 +46,21 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           role: user.role,
           phone: user.phone || undefined,
+          passwordChangedAt: user.passwordChangedAt?.toISOString(),
         }
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
-      const tokenUserId = (token.id as string | undefined) ?? token.sub
+      const tokenUserId = (token.id as string | undefined) ?? token.sub ?? user?.id
 
       if (tokenUserId) {
         const dbUser = await db.select({
           id: users.id,
           role: users.role,
           phone: users.phone,
+          passwordChangedAt: users.passwordChangedAt,
         })
           .from(users)
           .where(eq(users.id, tokenUserId))
@@ -69,18 +72,39 @@ export const authOptions: NextAuthOptions = {
           delete token.id
           delete token.role
           delete token.phone
+          delete token.passwordChangedAt
+          return token
+        }
+
+        const dbPasswordChangedAt = dbUser.passwordChangedAt?.toISOString() ?? null
+        const tokenPasswordChangedAt = typeof token.passwordChangedAt === 'string'
+          ? token.passwordChangedAt
+          : null
+        const shouldInvalidateForPasswordChange = !user && (
+          (tokenPasswordChangedAt === null && dbPasswordChangedAt !== null) ||
+          (tokenPasswordChangedAt !== null && dbPasswordChangedAt !== tokenPasswordChangedAt)
+        )
+
+        if (shouldInvalidateForPasswordChange) {
+          delete token.sub
+          delete token.id
+          delete token.role
+          delete token.phone
+          delete token.passwordChangedAt
           return token
         }
 
         token.id = dbUser.id
         token.role = dbUser.role
         token.phone = dbUser.phone ?? undefined
+        token.passwordChangedAt = dbPasswordChangedAt ?? undefined
       }
 
       if (user) {
         token.id = user.id
         token.role = user.role
         token.phone = user.phone
+        token.passwordChangedAt = user.passwordChangedAt
       }
       return token
     },

@@ -17,6 +17,7 @@ async function createUser() {
       name,
       role,
       hashedPassword,
+      passwordChangedAt: new Date(),
       phone: '+1234567890',
     }).returning()
 

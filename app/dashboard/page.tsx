@@ -494,6 +494,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <Link href="/admin#staff-management">Admin Panel</Link>
               </Button>
             ) : null}
+            <Button asChild size="sm" variant="outline">
+              <Link href="/account/password">Change Password</Link>
+            </Button>
             <SignOutButton />
           </div>
         </div>
@@ -716,6 +719,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <Link href={buildDashboardLink('week', now)}>
                     Go To Today
                   </Link>
+                </Button>
+                <Button asChild className="w-full" variant="outline">
+                  <Link href="/account/password">Change Password</Link>
                 </Button>
                 {canManageStaff ? (
                   <Button asChild className="w-full" variant="outline">

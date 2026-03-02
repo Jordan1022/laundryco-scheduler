@@ -1,7 +1,7 @@
 'use client'
 
 import { signIn } from 'next-auth/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,7 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
   const router = useRouter()
+
+  useEffect(() => {
+    setStatus(new URLSearchParams(window.location.search).get('status'))
+  }, [])
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -48,6 +53,11 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {status === 'password-updated' ? (
+            <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-800">
+              Password updated. Please sign in with your new password.
+            </div>
+          ) : null}
           <form onSubmit={onSubmit} className="space-y-4">
             <div>
               <Input

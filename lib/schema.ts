@@ -9,6 +9,7 @@ export const users = pgTable('users', {
   phone: text('phone'), // for SMS notifications
   role: text('role').notNull().default('employee'), // 'employee', 'manager', 'admin'
   hashedPassword: text('hashed_password'),
+  passwordChangedAt: timestamp('password_changed_at'),
   emailVerified: timestamp('email_verified'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
