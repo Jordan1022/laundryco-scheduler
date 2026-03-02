@@ -447,6 +447,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const thisWeekHours = thisWeekShiftRows.reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0)
   const teamCount = teamRows.length
   const unreadNotificationsCount = unreadNotificationsCountRow?.value ?? 0
+  const canManageStaff = role === 'manager' || role === 'admin'
   const formStatus = getQueryValue(searchParams?.status)
   const formError = getQueryValue(searchParams?.error)
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || ''
@@ -475,9 +476,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium bg-slate-100 px-3 py-1 rounded-full">
-              {role}
-            </span>
+            {canManageStaff ? (
+              <Link
+                href="/admin"
+                className="text-sm font-medium bg-blue-100 text-blue-900 px-3 py-1 rounded-full hover:bg-blue-200 transition-colors"
+                title="Open admin panel"
+              >
+                {role}
+              </Link>
+            ) : (
+              <span className="text-sm font-medium bg-slate-100 px-3 py-1 rounded-full">
+                {role}
+              </span>
+            )}
+            {canManageStaff ? (
+              <Button asChild size="sm" variant="outline">
+                <Link href="/admin#staff-management">Admin Panel</Link>
+              </Button>
+            ) : null}
             <SignOutButton />
           </div>
         </div>
@@ -505,16 +521,31 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <p className="text-sm text-muted-foreground">Scheduled this week</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Team Members</CardTitle>
-              <Users className="h-5 w-5 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{teamCount}</div>
-              <p className="text-sm text-muted-foreground">Active users</p>
-            </CardContent>
-          </Card>
+          {canManageStaff ? (
+            <Link href="/admin#staff-management" className="block">
+              <Card className="transition-colors hover:border-blue-300">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Team Members</CardTitle>
+                  <Users className="h-5 w-5 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{teamCount}</div>
+                  <p className="text-sm text-muted-foreground">Active users • Open staff management</p>
+                </CardContent>
+              </Card>
+            </Link>
+          ) : (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Team Members</CardTitle>
+                <Users className="h-5 w-5 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{teamCount}</div>
+                <p className="text-sm text-muted-foreground">Active users</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <div className={cn('grid grid-cols-1 gap-8', selectedView === 'week' ? 'lg:grid-cols-1' : 'lg:grid-cols-3')}>
@@ -686,7 +717,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     Go To Today
                   </Link>
                 </Button>
-                {role === 'manager' || role === 'admin' ? (
+                {canManageStaff ? (
+                  <Button asChild className="w-full" variant="outline">
+                    <Link href="/admin#staff-management">Manage Staff</Link>
+                  </Button>
+                ) : null}
+                {canManageStaff ? (
                   <Button asChild className="w-full bg-[#1e3a8a] hover:bg-[#172b6d]">
                     <Link href="/admin#create-shift">Create New Shift</Link>
                   </Button>

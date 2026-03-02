@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { and, count, desc, eq, gte, inArray, lt, ne } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { assignments, shiftSwapRequests, shifts, timeOffRequests, users } from '@/lib/schema'
+import { assignments, auditLog, shiftSwapRequests, shifts, timeOffRequests, users } from '@/lib/schema'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -436,6 +436,48 @@ async function createStaffAction(formData: FormData) {
   redirect('/admin?status=staff-created#staff-management')
 }
 
+async function updateStaffProfileAction(formData: FormData) {
+  'use server'
+
+  await requireManagerSession()
+
+  const userId = String(formData.get('userId') ?? '')
+  const name = String(formData.get('name') ?? '').trim()
+  const email = String(formData.get('email') ?? '').trim().toLowerCase()
+  const phone = String(formData.get('phone') ?? '').trim()
+
+  if (!userId || !name || !email) {
+    redirect('/admin?error=staff-profile-missing-fields#staff-management')
+  }
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    redirect('/admin?error=staff-invalid-email#staff-management')
+  }
+
+  const [existingUser] = await db.select({
+    id: users.id,
+  }).from(users).where(eq(users.id, userId)).limit(1)
+
+  if (!existingUser) {
+    redirect('/admin?error=staff-not-found#staff-management')
+  }
+
+  try {
+    await db.update(users).set({
+      name,
+      email,
+      phone: phone || null,
+      updatedAt: new Date(),
+    }).where(eq(users.id, userId))
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
+      redirect('/admin?error=staff-email-exists#staff-management')
+    }
+    throw error
+  }
+
+  redirect('/admin?status=staff-profile-updated#staff-management')
+}
+
 async function updateStaffRoleAction(formData: FormData) {
   'use server'
 
@@ -526,6 +568,76 @@ async function setStaffStatusAction(formData: FormData) {
   }).where(eq(users.id, userId))
 
   redirect('/admin?status=staff-reactivated#staff-management')
+}
+
+async function deleteStaffAction(formData: FormData) {
+  'use server'
+
+  const session = await requireManagerSession()
+  const userId = String(formData.get('userId') ?? '')
+
+  if (!userId) {
+    redirect('/admin?error=staff-not-found#staff-management')
+  }
+
+  const [existingUser] = await db.select({
+    id: users.id,
+    role: users.role,
+  }).from(users).where(eq(users.id, userId)).limit(1)
+
+  if (!existingUser) {
+    redirect('/admin?error=staff-not-found#staff-management')
+  }
+
+  if (existingUser.id === session.user.id) {
+    redirect('/admin?error=staff-cannot-delete-self#staff-management')
+  }
+
+  if (existingUser.role === 'admin') {
+    const [adminCountRow] = await db.select({ value: count() })
+      .from(users)
+      .where(eq(users.role, 'admin'))
+
+    if ((adminCountRow?.value ?? 0) <= 1) {
+      redirect('/admin?error=staff-last-admin#staff-management')
+    }
+  }
+
+  if (existingUser.role !== 'inactive') {
+    redirect('/admin?error=staff-delete-requires-inactive#staff-management')
+  }
+
+  await db.transaction(async (tx) => {
+    const assignmentRows = await tx.select({ id: assignments.id })
+      .from(assignments)
+      .where(eq(assignments.userId, userId))
+    const assignmentIds = assignmentRows.map((row) => row.id)
+
+    if (assignmentIds.length > 0) {
+      await tx.delete(shiftSwapRequests).where(inArray(shiftSwapRequests.originalAssignmentId, assignmentIds))
+    }
+
+    await tx.delete(shiftSwapRequests).where(eq(shiftSwapRequests.requestedUserId, userId))
+
+    await tx.update(timeOffRequests).set({
+      reviewedBy: null,
+    }).where(eq(timeOffRequests.reviewedBy, userId))
+
+    await tx.delete(timeOffRequests).where(eq(timeOffRequests.userId, userId))
+
+    await tx.update(shifts).set({
+      createdBy: null,
+      updatedAt: new Date(),
+    }).where(eq(shifts.createdBy, userId))
+
+    await tx.update(auditLog).set({
+      userId: null,
+    }).where(eq(auditLog.userId, userId))
+
+    await tx.delete(users).where(eq(users.id, userId))
+  })
+
+  redirect('/admin?status=staff-deleted#staff-management')
 }
 
 async function resetStaffPasswordAction(formData: FormData) {
@@ -934,42 +1046,50 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{pendingRequestsCount}</div>
-              <p className="text-sm text-muted-foreground">Time off and swap approvals</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Unfilled Shifts</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{unfilledUpcomingShifts.length}</div>
-              <p className="text-sm text-muted-foreground">In the next {upcomingShiftRows.length} shifts</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Team Members</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{activeStaff.length}</div>
-              <p className="text-sm text-muted-foreground">All schedulable users</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Scheduled Hours</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{formatHours(weekHours)}</div>
-              <p className="text-sm text-muted-foreground">Current week (assigned only)</p>
-            </CardContent>
-          </Card>
+          <Link href="#requests" className="block">
+            <Card className="transition-colors hover:border-blue-300">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{pendingRequestsCount}</div>
+                <p className="text-sm text-muted-foreground">Time off and swap approvals</p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="#upcoming-shifts" className="block">
+            <Card className="transition-colors hover:border-blue-300">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Unfilled Shifts</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{unfilledUpcomingShifts.length}</div>
+                <p className="text-sm text-muted-foreground">In the next {upcomingShiftRows.length} shifts</p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="#staff-management" className="block">
+            <Card className="transition-colors hover:border-blue-300">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Team Members</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{activeStaff.length}</div>
+                <p className="text-sm text-muted-foreground">All schedulable users</p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="#create-shift" className="block">
+            <Card className="transition-colors hover:border-blue-300">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Scheduled Hours</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{formatHours(weekHours)}</div>
+                <p className="text-sm text-muted-foreground">Current week (assigned only)</p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         <Card>
@@ -1496,6 +1616,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               Staff account created.
             </div>
           ) : null}
+          {formStatus === 'staff-profile-updated' ? (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+              Staff profile updated.
+            </div>
+          ) : null}
           {formStatus === 'staff-role-updated' ? (
             <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
               Staff role updated.
@@ -1516,9 +1641,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               Staff password reset.
             </div>
           ) : null}
+          {formStatus === 'staff-deleted' ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              Staff account permanently deleted.
+            </div>
+          ) : null}
           {formError === 'staff-missing-fields' ? (
             <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
               Name, email, and password are required to create staff.
+            </div>
+          ) : null}
+          {formError === 'staff-profile-missing-fields' ? (
+            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+              Name and email are required to update a staff profile.
             </div>
           ) : null}
           {formError === 'staff-invalid-email' ? (
@@ -1554,6 +1689,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           {formError === 'staff-last-admin' ? (
             <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
               You must keep at least one active admin account.
+            </div>
+          ) : null}
+          {formError === 'staff-cannot-delete-self' ? (
+            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+              You cannot delete your own account while you are signed in.
+            </div>
+          ) : null}
+          {formError === 'staff-delete-requires-inactive' ? (
+            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+              Deactivate this account first before deleting it permanently.
             </div>
           ) : null}
 
@@ -1626,6 +1771,27 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         <span>{staff.phone ?? 'No phone on file'}</span>
                       </div>
 
+                      <form action={updateStaffProfileAction} className="space-y-2 border-t pt-3">
+                        <input type="hidden" name="userId" value={staff.id} />
+                        <div className="space-y-1">
+                          <label htmlFor={`staff-name-${staff.id}`} className="text-xs font-medium">Name</label>
+                          <Input id={`staff-name-${staff.id}`} name="name" defaultValue={staff.name} required className="h-9" />
+                        </div>
+                        <div className="space-y-1">
+                          <label htmlFor={`staff-email-${staff.id}`} className="text-xs font-medium">Email</label>
+                          <Input id={`staff-email-${staff.id}`} name="email" type="email" defaultValue={staff.email} required className="h-9" />
+                        </div>
+                        <div className="space-y-1">
+                          <label htmlFor={`staff-phone-${staff.id}`} className="text-xs font-medium">Phone</label>
+                          <Input id={`staff-phone-${staff.id}`} name="phone" type="tel" defaultValue={staff.phone ?? ''} className="h-9" />
+                        </div>
+                        <div className="flex justify-end">
+                          <Button size="sm" type="submit" variant="outline">
+                            Save Profile
+                          </Button>
+                        </div>
+                      </form>
+
                       {staff.role !== 'inactive' ? (
                         <div className="space-y-2">
                           <form action={updateStaffRoleAction} className="flex gap-2">
@@ -1688,6 +1854,21 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           </div>
                         </div>
                       </form>
+
+                      <div className="border-t pt-3">
+                        {staff.role === 'inactive' && staff.id !== session.user.id ? (
+                          <form action={deleteStaffAction} className="flex justify-end">
+                            <input type="hidden" name="userId" value={staff.id} />
+                            <Button size="sm" type="submit" variant="destructive">
+                              Delete Permanently
+                            </Button>
+                          </form>
+                        ) : staff.role === 'inactive' ? (
+                          <p className="text-xs text-muted-foreground text-right">Sign out first before deleting this account.</p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground text-right">Deactivate this account before permanent delete.</p>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
