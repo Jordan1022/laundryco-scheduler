@@ -44,7 +44,7 @@ export default function ThemeToggle() {
       variant="outline"
       size="sm"
       onClick={toggleTheme}
-      className="fixed bottom-4 right-4 z-50 gap-2 bg-background/90 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/70"
+      className="fixed top-4 right-4 z-50 gap-2 bg-background/95 shadow-md backdrop-blur supports-[backdrop-filter]:bg-background/80"
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
