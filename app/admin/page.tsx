@@ -1033,6 +1033,7 @@ type AdminPageProps = {
     status?: string | string[]
     error?: string | string[]
     count?: string | string[]
+    openShiftId?: string | string[]
   }
 }
 
@@ -1155,6 +1156,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const activeStaff = schedulableStaffRows
   const formStatus = getQueryValue(searchParams?.status)
   const formError = getQueryValue(searchParams?.error)
+  const openShiftId = getQueryValue(searchParams?.openShiftId)
   const countValue = Number(getQueryValue(searchParams?.count) ?? 0)
   const createdBulkCount = Number.isFinite(countValue) && countValue > 0 ? Math.floor(countValue) : 0
   const pendingRequestsCount = pendingTimeOffRows.length + pendingSwapRows.length
@@ -1608,7 +1610,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       const assignedUserId = assignedUserIdByShift.get(shift.id) ?? ''
                       const assignedUserName = assignedUserId ? userNameMap.get(assignedUserId) : undefined
                       return (
-                        <div key={shift.id} className="border rounded-lg p-4 bg-white">
+                        <div key={shift.id} id={`shift-${shift.id}`} className="border rounded-lg p-4 bg-white">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
                               <p className="font-semibold">{shift.title}</p>
@@ -1633,7 +1635,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             </div>
                           </div>
 
-                          <details className="mt-4 rounded-md border border-slate-200 p-3">
+                          <details className="mt-4 rounded-md border border-slate-200 p-3" open={openShiftId === shift.id}>
                             <summary className="cursor-pointer text-sm font-medium">Edit / Reassign</summary>
                             <form action={updateShiftAction} className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                               <input type="hidden" name="shiftId" value={shift.id} />

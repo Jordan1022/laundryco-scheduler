@@ -12,6 +12,7 @@ import SignOutButton from '@/components/SignOutButton'
 import { Input } from '@/components/ui/input'
 import BrowserAlertToggle from '@/components/BrowserAlertToggle'
 import { markAllNotificationsRead, markNotificationRead, notifyRoles, notifyUsers } from '@/lib/notifications'
+import ScheduleGridWithModal from '@/components/ScheduleGridWithModal'
 
 const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' })
@@ -19,6 +20,7 @@ const monthDayLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'n
 const shortDateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 const shortTimeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' })
 const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+const CLOSING_TIME_MINUTES = 20 * 60 // 8:00 PM
 
 type DashboardView = 'week' | 'month'
 
@@ -127,6 +129,21 @@ function parseISODateOnly(value: string) {
   const date = new Date(`${value}T00:00:00`)
   if (Number.isNaN(date.getTime())) return null
   return date
+}
+
+function parseLocalDateTime(dateValue: string, timeValue: string) {
+  const dateTime = new Date(`${dateValue}T${timeValue}`)
+  if (Number.isNaN(dateTime.getTime())) return null
+  return dateTime
+}
+
+function parseTimeToMinutes(timeValue: string) {
+  const [hourRaw, minuteRaw] = timeValue.split(':')
+  const hours = Number(hourRaw)
+  const minutes = Number(minuteRaw)
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null
+  return (hours * 60) + minutes
 }
 
 function buildDashboardReturnUrl(
@@ -284,6 +301,84 @@ async function requestSwapAction(formData: FormData) {
   redirect(buildDashboardReturnUrl(returnView, returnDate, { status: 'swap-submitted', hash: 'swap-shift' }))
 }
 
+async function createShiftFromCalendarAction(formData: FormData) {
+  'use server'
+
+  const session = await requireAuthenticatedSession()
+  const { returnView, returnDate } = getReturnContext(formData)
+
+  if (session.user.role !== 'manager' && session.user.role !== 'admin') {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-not-authorized', hash: 'schedule' }))
+  }
+
+  const title = String(formData.get('title') ?? '').trim()
+  const location = String(formData.get('location') ?? '').trim()
+  const notes = String(formData.get('notes') ?? '').trim()
+  const shiftDate = String(formData.get('shiftDate') ?? '')
+  const startTime = String(formData.get('startTime') ?? '')
+  const endTime = String(formData.get('endTime') ?? '')
+  const assignedUserId = String(formData.get('assignedUserId') ?? '')
+  const requestedStatus = String(formData.get('status') ?? 'published')
+  const status = requestedStatus === 'draft' ? 'draft' : 'published'
+
+  if (!title || !shiftDate || !startTime || !endTime) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-missing-fields', hash: 'schedule' }))
+  }
+
+  const startDateTime = parseLocalDateTime(shiftDate, startTime)
+  const endDateTime = parseLocalDateTime(shiftDate, endTime)
+  if (!startDateTime || !endDateTime || endDateTime <= startDateTime) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-invalid-time', hash: 'schedule' }))
+  }
+  const startMinutes = parseTimeToMinutes(startTime)
+  const endMinutes = parseTimeToMinutes(endTime)
+  if (startMinutes === null || endMinutes === null || startMinutes >= CLOSING_TIME_MINUTES || endMinutes > CLOSING_TIME_MINUTES) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-after-hours', hash: 'schedule' }))
+  }
+
+  const [newShift] = await db.insert(shifts).values({
+    title,
+    location: location || null,
+    notes: notes || null,
+    startTime: startDateTime,
+    endTime: endDateTime,
+    status,
+    createdBy: session.user.id,
+  }).returning({ id: shifts.id })
+
+  let assignmentCreatedForUserId: string | null = null
+  if (assignedUserId) {
+    const [matchingUser] = await db.select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, assignedUserId), ne(users.role, 'inactive')))
+      .limit(1)
+
+    if (!matchingUser) {
+      redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-invalid-assignee', hash: 'schedule' }))
+    }
+
+    await db.insert(assignments).values({
+      shiftId: newShift.id,
+      userId: assignedUserId,
+      status: 'assigned',
+    })
+    assignmentCreatedForUserId = assignedUserId
+  }
+
+  if (assignmentCreatedForUserId && status !== 'draft') {
+    await notifyUsers([
+      {
+        userId: assignmentCreatedForUserId,
+        title: 'New shift assigned',
+        body: `${title} on ${formatShiftDateTime(startDateTime, endDateTime)}.`,
+        link: '/dashboard',
+      },
+    ])
+  }
+
+  redirect(buildDashboardReturnUrl(returnView, returnDate, { status: 'calendar-shift-created', hash: 'schedule' }))
+}
+
 async function markNotificationReadAction(formData: FormData) {
   'use server'
 
@@ -313,6 +408,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const session = await requireAuthenticatedSession()
 
   const { name, role } = session.user
+  const canManageStaff = role === 'manager' || role === 'admin'
   const selectedView = parseViewParam(getQueryValue(searchParams?.view))
   const anchorDate = toStartOfDay(parseDateParam(getQueryValue(searchParams?.date)))
   const monthStart = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1)
@@ -334,6 +430,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     teamRows,
     notificationRows,
     unreadNotificationsCountRow,
+    schedulableStaffRows,
   ] = await Promise.all([
     db.select({
       shiftId: shifts.id,
@@ -425,6 +522,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .from(notifications)
       .where(and(eq(notifications.userId, session.user.id), eq(notifications.isRead, false)))
       .then((rows) => rows[0]),
+    canManageStaff
+      ? db.select({
+          id: users.id,
+          name: users.name,
+          role: users.role,
+        })
+          .from(users)
+          .where(ne(users.role, 'inactive'))
+          .orderBy(users.name)
+      : Promise.resolve([]),
   ])
 
   const shiftsByDay = new Map<string, typeof scheduledShiftRows>()
@@ -447,10 +554,34 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const thisWeekHours = thisWeekShiftRows.reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0)
   const teamCount = teamRows.length
   const unreadNotificationsCount = unreadNotificationsCountRow?.value ?? 0
-  const canManageStaff = role === 'manager' || role === 'admin'
   const formStatus = getQueryValue(searchParams?.status)
   const formError = getQueryValue(searchParams?.error)
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || ''
+  const maxDayShiftsVisible = selectedView === 'month' ? 2 : 4
+  const dayEntries = visibleDays.map((day) => {
+    const key = dateKey(day)
+    const dayShifts = shiftsByDay.get(key) ?? []
+    const compactShifts = dayShifts.map((shift) => ({
+      shiftId: shift.shiftId,
+      title: shift.title,
+      location: shift.location ?? '',
+      startLabel: shortTimeLabel.format(shift.startTime),
+      endLabel: shortTimeLabel.format(shift.endTime),
+      dateTimeLabel: formatShiftDateTime(shift.startTime, shift.endTime),
+    }))
+    return {
+      key,
+      dateIso: formatDateParam(day),
+      dayNumber: day.getDate(),
+      isToday: key === todayKey,
+      isCurrentMonth: day.getMonth() === monthStart.getMonth() && day.getFullYear() === monthStart.getFullYear(),
+      shiftCount: compactShifts.length,
+      visibleShifts: compactShifts.slice(0, maxDayShiftsVisible),
+      hiddenShiftCount: Math.max(0, compactShifts.length - maxDayShiftsVisible),
+      shifts: compactShifts,
+      dateLabel: shortDateLabel.format(day),
+    }
+  })
 
   const prevAnchor = selectedView === 'month'
     ? new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, 1)
@@ -553,7 +684,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
         <div className={cn('grid grid-cols-1 gap-8', selectedView === 'week' ? 'lg:grid-cols-1' : 'lg:grid-cols-3')}>
           <div className={cn(selectedView === 'week' ? 'lg:col-span-1' : 'lg:col-span-2')}>
-            <Card>
+            <Card id="schedule">
               <CardHeader className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <CardTitle>Your Schedule</CardTitle>
@@ -583,64 +714,41 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="-mx-2 overflow-x-auto px-2">
-                  <div className={cn(selectedView === 'week' ? 'min-w-[720px]' : 'min-w-[760px]')}>
-                    <div className="grid grid-cols-7 gap-2 mb-2">
-                      {weekdayLabels.map((label) => (
-                        <div key={label} className="text-xs font-semibold text-muted-foreground uppercase tracking-wide text-center py-1">
-                          {label}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-7 gap-2">
-                      {visibleDays.map((day) => {
-                        const key = dateKey(day)
-                        const dayShifts = shiftsByDay.get(key) ?? []
-                        const isToday = key === todayKey
-                        const isCurrentMonth = day.getMonth() === monthStart.getMonth() && day.getFullYear() === monthStart.getFullYear()
-
-                        return (
-                          <div
-                            key={key}
-                            className={cn(
-                              selectedView === 'week' ? 'min-h-44 rounded-md border p-3 bg-white' : 'min-h-28 rounded-md border p-2 bg-white',
-                              selectedView === 'month' && !isCurrentMonth && 'bg-slate-50 text-slate-400',
-                            )}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span
-                                className={cn(
-                                  'text-xs font-semibold',
-                                  isToday && 'bg-[#1e3a8a] text-white rounded-full h-6 w-6 inline-flex items-center justify-center',
-                                )}
-                              >
-                                {day.getDate()}
-                              </span>
-                              {dayShifts.length > 0 ? (
-                                <span className="text-[10px] text-slate-500">{dayShifts.length} shift{dayShifts.length === 1 ? '' : 's'}</span>
-                              ) : null}
-                            </div>
-                            <div className="mt-2 space-y-1">
-                              {dayShifts.slice(0, selectedView === 'month' ? 2 : 4).map((shift) => (
-                                <div key={shift.shiftId} className="rounded bg-blue-50 border border-blue-100 px-1.5 py-1 text-[11px] leading-tight">
-                                  <p className="font-medium text-blue-900">
-                                    {shortTimeLabel.format(shift.startTime)}-{shortTimeLabel.format(shift.endTime)}
-                                  </p>
-                                  <p className="text-blue-800 truncate">{shift.title}</p>
-                                </div>
-                              ))}
-                              {dayShifts.length > (selectedView === 'month' ? 2 : 4) ? (
-                                <p className="text-[11px] text-muted-foreground">
-                                  +{dayShifts.length - (selectedView === 'month' ? 2 : 4)} more
-                                </p>
-                              ) : null}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
+                {formStatus === 'calendar-shift-created' ? (
+                  <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-800">
+                    Shift added from calendar.
                   </div>
-                </div>
+                ) : null}
+                {formError === 'calendar-missing-fields' ? (
+                  <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
+                    Title, date, start time, and end time are required.
+                  </div>
+                ) : null}
+                {formError === 'calendar-invalid-time' ? (
+                  <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
+                    Shift end time must be after start time.
+                  </div>
+                ) : null}
+                {formError === 'calendar-after-hours' ? (
+                  <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
+                    Store closes at 8:00 PM. Shifts must end by 8:00 PM.
+                  </div>
+                ) : null}
+                {formError === 'calendar-invalid-assignee' ? (
+                  <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
+                    The selected assignee does not exist.
+                  </div>
+                ) : null}
+                <ScheduleGridWithModal
+                  selectedView={selectedView}
+                  weekdayLabels={weekdayLabels}
+                  dayEntries={dayEntries}
+                  canManageStaff={canManageStaff}
+                  staffOptions={schedulableStaffRows}
+                  returnView={selectedView}
+                  returnDate={formatDateParam(anchorDate)}
+                  createShiftAction={canManageStaff ? createShiftFromCalendarAction : undefined}
+                />
               </CardContent>
             </Card>
           </div>
