@@ -52,16 +52,16 @@ function formatShiftDateTime(start: Date, end: Date) {
 }
 
 function rolePill(role: string) {
-  if (role === 'admin') return 'bg-violet-100 text-violet-800'
-  if (role === 'manager') return 'bg-blue-100 text-blue-800'
-  if (role === 'inactive') return 'bg-rose-100 text-rose-800'
-  return 'bg-slate-100 text-slate-700'
+  if (role === 'admin') return 'bg-violet-100 text-violet-800 dark:bg-violet-100 dark:text-violet-800'
+  if (role === 'manager') return 'bg-blue-100 text-blue-800 dark:bg-blue-100 dark:text-blue-800'
+  if (role === 'inactive') return 'bg-rose-100 text-rose-800 dark:bg-rose-100 dark:text-rose-800'
+  return 'bg-muted text-muted-foreground'
 }
 
 function shiftStatusPill(status: string | null) {
-  if (status === 'published') return 'bg-emerald-100 text-emerald-800'
-  if (status === 'draft') return 'bg-amber-100 text-amber-800'
-  return 'bg-slate-100 text-slate-700'
+  if (status === 'published') return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-50 dark:text-emerald-800'
+  if (status === 'draft') return 'bg-amber-100 text-amber-800 dark:bg-amber-50 dark:text-amber-800'
+  return 'bg-muted text-muted-foreground'
 }
 
 function parseLocalDateTime(dateValue: string, timeValue: string) {
@@ -1512,7 +1512,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <label className="text-sm font-medium">Repeat On</label>
                 <div className="flex flex-wrap gap-2">
                   {WEEKDAY_OPTIONS.map((day) => (
-                    <label key={day.value} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm bg-white">
+                    <label key={day.value} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm bg-card">
                       <input type="checkbox" name="daysOfWeek" value={day.value} className="h-4 w-4" />
                       <span>{day.label}</span>
                     </label>
@@ -1610,7 +1610,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       const assignedUserId = assignedUserIdByShift.get(shift.id) ?? ''
                       const assignedUserName = assignedUserId ? userNameMap.get(assignedUserId) : undefined
                       return (
-                        <div key={shift.id} id={`shift-${shift.id}`} className="border rounded-lg p-4 bg-white">
+                        <div key={shift.id} id={`shift-${shift.id}`} className="border rounded-lg p-4 bg-card">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
                               <p className="font-semibold">{shift.title}</p>
@@ -1765,7 +1765,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   <p className="text-sm text-muted-foreground">No active shifts in this range.</p>
                 ) : (
                   [...coverageByDay.values()].map((day) => (
-                    <div key={day.label} className="rounded-lg border p-3 bg-white">
+                    <div key={day.label} className="rounded-lg border p-3 bg-card">
                       <div className="flex items-center justify-between text-sm">
                         <span className="font-medium">{day.label}</span>
                         <span className={cn('text-xs font-medium px-2 py-1 rounded-full', day.open > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800')}>
@@ -1844,7 +1844,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 ) : (
                   <div className="space-y-3">
                     {pendingTimeOffRows.map((request) => (
-                      <div key={request.id} className="rounded-lg border p-3 bg-white">
+                      <div key={request.id} className="rounded-lg border p-3 bg-card">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="font-medium">{request.userName ?? 'Unknown user'}</p>
@@ -1896,7 +1896,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       const toUserName = userNameMap.get(swap.requestedUserId)
 
                       return (
-                        <div key={swap.id} className="rounded-lg border p-3 bg-white">
+                        <div key={swap.id} className="rounded-lg border p-3 bg-card">
                           <p className="font-medium">{shift?.title ?? 'Unknown shift'}</p>
                           <p className="text-sm text-muted-foreground">
                             {shift?.startTime ? `${dateLabel.format(shift.startTime)} • ${timeLabel.format(shift.startTime)} - ${timeLabel.format(shift.endTime)}` : 'Shift details unavailable'}
@@ -2079,7 +2079,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                   {staffRows.map((staff) => (
-                    <div key={staff.id} className="rounded-lg border p-4 bg-white space-y-3">
+                    <div key={staff.id} className="rounded-lg border p-4 bg-card space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold">{staff.name}</p>

@@ -76,7 +76,7 @@ export default function ScheduleGridWithModal({
                 onClick={() => setActiveDayKey(day.key)}
                 className={cn(
                   'text-left transition-colors hover:border-blue-300',
-                  selectedView === 'week' ? 'min-h-44 rounded-md border p-3 bg-white' : 'min-h-28 rounded-md border p-2 bg-white',
+                  selectedView === 'week' ? 'min-h-44 rounded-md border p-3 bg-card' : 'min-h-28 rounded-md border p-2 bg-card',
                   selectedView === 'month' && !day.isCurrentMonth && 'bg-slate-50 text-slate-400',
                 )}
               >
@@ -90,7 +90,7 @@ export default function ScheduleGridWithModal({
                     {day.dayNumber}
                   </span>
                   {day.shiftCount > 0 ? (
-                    <span className="text-[10px] text-slate-500">{day.shiftCount} shift{day.shiftCount === 1 ? '' : 's'}</span>
+                    <span className="text-[10px] text-muted-foreground">{day.shiftCount} shift{day.shiftCount === 1 ? '' : 's'}</span>
                   ) : null}
                 </div>
                 <div className="mt-2 space-y-1">
@@ -120,7 +120,7 @@ export default function ScheduleGridWithModal({
             onClick={() => setActiveDayKey(null)}
             className="absolute inset-0 bg-slate-900/45"
           />
-          <div className="relative w-full sm:max-w-2xl max-h-[88vh] overflow-y-auto rounded-t-xl sm:rounded-xl bg-white shadow-xl border p-4 sm:p-5">
+          <div className="relative w-full sm:max-w-2xl max-h-[88vh] overflow-y-auto rounded-t-xl sm:rounded-xl bg-card shadow-xl border p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-lg font-semibold">{activeDay.dateLabel}</h3>

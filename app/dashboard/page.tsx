@@ -610,13 +610,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             {canManageStaff ? (
               <Link
                 href="/admin"
-                className="text-sm font-medium bg-blue-100 text-blue-900 px-3 py-1 rounded-full hover:bg-blue-200 transition-colors"
+                className="text-sm font-medium bg-blue-100 text-blue-900 px-3 py-1 rounded-full hover:bg-blue-200 dark:hover:bg-blue-100 transition-colors"
                 title="Open admin panel"
               >
                 {role}
               </Link>
             ) : (
-              <span className="text-sm font-medium bg-slate-100 px-3 py-1 rounded-full">
+              <span className="text-sm font-medium bg-muted px-3 py-1 rounded-full">
                 {role}
               </span>
             )}
@@ -625,9 +625,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <Link href="/admin#staff-management">Admin Panel</Link>
               </Button>
             ) : null}
-            <Button asChild size="sm" variant="outline">
-              <Link href="/account/password">Change Password</Link>
-            </Button>
+            {role !== 'admin' ? (
+              <Button asChild size="sm" variant="outline">
+                <Link href="/account/password">Change Password</Link>
+              </Button>
+            ) : null}
             <SignOutButton />
           </div>
         </div>
@@ -757,7 +759,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <CardHeader className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle>Notifications</CardTitle>
-                  <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium">
+                  <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium">
                     {unreadNotificationsCount} unread
                   </span>
                 </div>
@@ -781,7 +783,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           key={notification.id}
                           className={cn(
                             'rounded-md border p-3 space-y-2',
-                            notification.isRead ? 'bg-white' : 'bg-blue-50 border-blue-200',
+                            notification.isRead ? 'bg-card' : 'bg-blue-50 border-blue-200',
                           )}
                         >
                           <div className="space-y-1">
@@ -974,7 +976,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 ) : (
                   <div className="space-y-3">
                     {upcomingShiftRows.map((shift) => (
-                      <div key={shift.shiftId} className="rounded-md border p-3 bg-white">
+                      <div key={shift.shiftId} className="rounded-md border p-3 bg-card">
                         <p className="font-medium">{shift.title}</p>
                         <p className="text-sm text-muted-foreground">
                           {shortDateLabel.format(shift.startTime)} · {shortTimeLabel.format(shift.startTime)} - {shortTimeLabel.format(shift.endTime)}
