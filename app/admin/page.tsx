@@ -1200,7 +1200,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="w-full md:w-auto flex flex-wrap items-center justify-end gap-2">
             <Button asChild variant="outline">
               <Link href="/dashboard">Team View</Link>
             </Button>
@@ -1217,7 +1217,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{pendingRequestsCount}</div>
+                <div className="text-2xl sm:text-3xl font-bold">{pendingRequestsCount}</div>
                 <p className="text-sm text-muted-foreground">Time off and swap approvals</p>
               </CardContent>
             </Card>
@@ -1228,7 +1228,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <CardTitle className="text-sm font-medium">Unfilled Shifts</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{unfilledUpcomingShifts.length}</div>
+                <div className="text-2xl sm:text-3xl font-bold">{unfilledUpcomingShifts.length}</div>
                 <p className="text-sm text-muted-foreground">In the next {upcomingShiftRows.length} shifts</p>
               </CardContent>
             </Card>
@@ -1239,7 +1239,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <CardTitle className="text-sm font-medium">Team Members</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{activeStaff.length}</div>
+                <div className="text-2xl sm:text-3xl font-bold">{activeStaff.length}</div>
                 <p className="text-sm text-muted-foreground">All schedulable users</p>
               </CardContent>
             </Card>
@@ -1250,7 +1250,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <CardTitle className="text-sm font-medium">Scheduled Hours</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{formatHours(weekHours)}</div>
+                <div className="text-2xl sm:text-3xl font-bold">{formatHours(weekHours)}</div>
                 <p className="text-sm text-muted-foreground">Current week (assigned only)</p>
               </CardContent>
             </Card>
@@ -2113,7 +2113,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
                       {staff.role !== 'inactive' ? (
                         <div className="space-y-2">
-                          <form action={updateStaffRoleAction} className="flex gap-2">
+                          <form action={updateStaffRoleAction} className="flex flex-col sm:flex-row gap-2">
                             <input type="hidden" name="userId" value={staff.id} />
                             <select
                               name="role"
@@ -2124,7 +2124,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                               <option value="manager">Manager</option>
                               <option value="admin">Admin</option>
                             </select>
-                            <Button size="sm" type="submit" variant="outline">Save Role</Button>
+                            <Button size="sm" type="submit" variant="outline" className="w-full sm:w-auto">Save Role</Button>
                           </form>
                           <form action={setStaffStatusAction} className="flex justify-end">
                             <input type="hidden" name="userId" value={staff.id} />

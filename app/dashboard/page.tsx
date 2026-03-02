@@ -465,8 +465,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start sm:items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-[#1e3a8a] flex items-center justify-center">
               <span className="text-white font-bold">LC</span>
             </div>
@@ -475,7 +475,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <p className="text-sm text-muted-foreground">Welcome back, {name}</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="w-full sm:w-auto flex flex-wrap items-center justify-end gap-2 sm:gap-4">
             {canManageStaff ? (
               <Link
                 href="/admin"
@@ -507,7 +507,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <Calendar className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{upcomingShiftCount}</div>
+              <div className="text-2xl sm:text-3xl font-bold">{upcomingShiftCount}</div>
               <p className="text-sm text-muted-foreground">Next 7 days</p>
             </CardContent>
           </Card>
@@ -517,7 +517,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <Clock className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{formatHours(thisWeekHours)}</div>
+              <div className="text-2xl sm:text-3xl font-bold">{formatHours(thisWeekHours)}</div>
               <p className="text-sm text-muted-foreground">Scheduled this week</p>
             </CardContent>
           </Card>
@@ -529,7 +529,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <Users className="h-5 w-5 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">{teamCount}</div>
+                  <div className="text-2xl sm:text-3xl font-bold">{teamCount}</div>
                   <p className="text-sm text-muted-foreground">Active users • Open staff management</p>
                 </CardContent>
               </Card>
@@ -541,7 +541,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <Users className="h-5 w-5 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{teamCount}</div>
+                <div className="text-2xl sm:text-3xl font-bold">{teamCount}</div>
                 <p className="text-sm text-muted-foreground">Active users</p>
               </CardContent>
             </Card>
@@ -563,7 +563,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     </Button>
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2">
                     <Button asChild variant="outline" size="sm">
                       <Link href={buildDashboardLink(selectedView, prevAnchor)}>
@@ -580,8 +580,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <div className={cn(selectedView === 'week' ? 'min-w-0' : 'min-w-[720px]')}>
+                <div className="-mx-2 overflow-x-auto px-2">
+                  <div className={cn(selectedView === 'week' ? 'min-w-[720px]' : 'min-w-[760px]')}>
                     <div className="grid grid-cols-7 gap-2 mb-2">
                       {weekdayLabels.map((label) => (
                         <div key={label} className="text-xs font-semibold text-muted-foreground uppercase tracking-wide text-center py-1">
@@ -675,7 +675,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         >
                           <div className="space-y-1">
                             <p className="text-sm font-semibold">{notification.title}</p>
-                            <p className="text-sm text-muted-foreground">{notification.body}</p>
+                            <p className="text-sm text-muted-foreground break-words">{notification.body}</p>
                             <p className="text-xs text-muted-foreground">{dateTimeLabel.format(notification.createdAt)}</p>
                           </div>
                           <div className="flex flex-wrap items-center justify-end gap-2">

@@ -5,6 +5,16 @@ import { AuthProvider } from '@/components/auth-provider'
 export const metadata: Metadata = {
   title: 'Laundry Co. Shift Scheduler',
   description: 'Employee shift scheduling for Laundry Co.',
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: '/icon',
+    apple: '/apple-icon',
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'Laundry Co Scheduler',
+    statusBarStyle: 'default',
+  },
 }
 
 export default function RootLayout({
