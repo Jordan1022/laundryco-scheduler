@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { TimePickerField } from '@/components/ui/date-time-picker'
 import { cn } from '@/lib/utils'
 
 type DayShift = {
@@ -167,46 +168,25 @@ export default function ScheduleGridWithModal({
                   <input type="hidden" name="returnView" value={returnView} />
                   <input type="hidden" name="returnDate" value={returnDate} />
                   <input type="hidden" name="shiftDate" value={activeDay.dateIso} />
-
-                  <div className="space-y-1 sm:col-span-2">
-                    <label htmlFor="calendar-shift-title" className="text-sm font-medium">Shift Title</label>
-                    <input
-                      id="calendar-shift-title"
-                      name="title"
-                      required
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      placeholder="Evening Front Desk"
-                    />
-                  </div>
+                  <p className="text-sm text-muted-foreground sm:col-span-2">
+                    Shift type and location are fixed for all new shifts.
+                  </p>
                   <div className="space-y-1">
                     <label htmlFor="calendar-shift-start" className="text-sm font-medium">Start Time</label>
-                    <input
+                    <TimePickerField
                       id="calendar-shift-start"
                       name="startTime"
-                      type="time"
                       max="19:59"
                       required
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     />
                   </div>
                   <div className="space-y-1">
                     <label htmlFor="calendar-shift-end" className="text-sm font-medium">End Time</label>
-                    <input
+                    <TimePickerField
                       id="calendar-shift-end"
                       name="endTime"
-                      type="time"
                       max="20:00"
                       required
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label htmlFor="calendar-shift-location" className="text-sm font-medium">Location</label>
-                    <input
-                      id="calendar-shift-location"
-                      name="location"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      placeholder="Main Store"
                     />
                   </div>
                   <div className="space-y-1">

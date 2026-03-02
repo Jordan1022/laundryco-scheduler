@@ -9,10 +9,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, ChevronLeft, ChevronRight, Clock, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import SignOutButton from '@/components/SignOutButton'
-import { Input } from '@/components/ui/input'
 import BrowserAlertToggle from '@/components/BrowserAlertToggle'
+import { DatePickerField } from '@/components/ui/date-time-picker'
 import { markAllNotificationsRead, markNotificationRead, notifyRoles, notifyUsers } from '@/lib/notifications'
 import ScheduleGridWithModal from '@/components/ScheduleGridWithModal'
+import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
 
 const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' })
@@ -311,8 +312,8 @@ async function createShiftFromCalendarAction(formData: FormData) {
     redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-not-authorized', hash: 'schedule' }))
   }
 
-  const title = String(formData.get('title') ?? '').trim()
-  const location = String(formData.get('location') ?? '').trim()
+  const title = DEFAULT_SHIFT_TITLE
+  const location = DEFAULT_SHIFT_LOCATION
   const notes = String(formData.get('notes') ?? '').trim()
   const shiftDate = String(formData.get('shiftDate') ?? '')
   const startTime = String(formData.get('startTime') ?? '')
@@ -321,7 +322,7 @@ async function createShiftFromCalendarAction(formData: FormData) {
   const requestedStatus = String(formData.get('status') ?? 'published')
   const status = requestedStatus === 'draft' ? 'draft' : 'published'
 
-  if (!title || !shiftDate || !startTime || !endTime) {
+  if (!shiftDate || !startTime || !endTime) {
     redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-missing-fields', hash: 'schedule' }))
   }
 
@@ -338,7 +339,7 @@ async function createShiftFromCalendarAction(formData: FormData) {
 
   const [newShift] = await db.insert(shifts).values({
     title,
-    location: location || null,
+    location,
     notes: notes || null,
     startTime: startDateTime,
     endTime: endDateTime,
@@ -723,7 +724,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 ) : null}
                 {formError === 'calendar-missing-fields' ? (
                   <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                    Title, date, start time, and end time are required.
+                    Date, start time, and end time are required.
                   </div>
                 ) : null}
                 {formError === 'calendar-invalid-time' ? (
@@ -866,11 +867,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
                   <div className="space-y-1">
                     <label htmlFor="startDate" className="text-sm font-medium">Start Date</label>
-                    <Input id="startDate" name="startDate" type="date" defaultValue={formatDateParam(now)} required />
+                    <DatePickerField id="startDate" name="startDate" defaultValue={formatDateParam(now)} required />
                   </div>
                   <div className="space-y-1">
                     <label htmlFor="endDate" className="text-sm font-medium">End Date</label>
-                    <Input id="endDate" name="endDate" type="date" defaultValue={formatDateParam(now)} required />
+                    <DatePickerField id="endDate" name="endDate" defaultValue={formatDateParam(now)} required />
                   </div>
                   <div className="space-y-1">
                     <label htmlFor="reason" className="text-sm font-medium">Reason (Optional)</label>

@@ -7,12 +7,14 @@ import { assignments, auditLog, shiftSwapRequests, shifts, timeOffRequests, user
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DatePickerField, TimePickerField } from '@/components/ui/date-time-picker'
 import TempPasswordField from '@/components/TempPasswordField'
 import { cn } from '@/lib/utils'
 import { CalendarDays, CalendarPlus, CheckSquare, UserPlus, Users } from 'lucide-react'
 import SignOutButton from '@/components/SignOutButton'
 import bcrypt from 'bcryptjs'
 import { notifyUsers } from '@/lib/notifications'
+import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
 
 const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 const timeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' })
@@ -133,8 +135,8 @@ async function createShiftAction(formData: FormData) {
 
   const session = await requireManagerSession()
 
-  const title = String(formData.get('title') ?? '').trim()
-  const location = String(formData.get('location') ?? '').trim()
+  const title = DEFAULT_SHIFT_TITLE
+  const location = DEFAULT_SHIFT_LOCATION
   const notes = String(formData.get('notes') ?? '').trim()
   const shiftDate = String(formData.get('shiftDate') ?? '')
   const startTime = String(formData.get('startTime') ?? '')
@@ -143,7 +145,7 @@ async function createShiftAction(formData: FormData) {
   const requestedStatus = String(formData.get('status') ?? 'published')
   const status = requestedStatus === 'draft' ? 'draft' : 'published'
 
-  if (!title || !shiftDate || !startTime || !endTime) {
+  if (!shiftDate || !startTime || !endTime) {
     redirect('/admin?error=missing-fields#create-shift')
   }
 
@@ -160,7 +162,7 @@ async function createShiftAction(formData: FormData) {
 
   const [newShift] = await db.insert(shifts).values({
     title,
-    location: location || null,
+    location,
     notes: notes || null,
     startTime: startDateTime,
     endTime: endDateTime,
@@ -204,8 +206,8 @@ async function createBulkScheduleAction(formData: FormData) {
 
   const session = await requireManagerSession()
 
-  const title = String(formData.get('title') ?? '').trim()
-  const location = String(formData.get('location') ?? '').trim()
+  const title = DEFAULT_SHIFT_TITLE
+  const location = DEFAULT_SHIFT_LOCATION
   const notes = String(formData.get('notes') ?? '').trim()
   const startDateRaw = String(formData.get('startDate') ?? '')
   const customEndDateRaw = String(formData.get('endDate') ?? '')
@@ -216,7 +218,7 @@ async function createBulkScheduleAction(formData: FormData) {
   const requestedStatus = String(formData.get('status') ?? 'published')
   const status = requestedStatus === 'draft' ? 'draft' : 'published'
 
-  if (!title || !startDateRaw || !startTime || !endTime) {
+  if (!startDateRaw || !startTime || !endTime) {
     redirect('/admin?error=bulk-missing-fields#bulk-schedule')
   }
 
@@ -282,7 +284,7 @@ async function createBulkScheduleAction(formData: FormData) {
 
     shiftInputs.push({
       title,
-      location: location || null,
+      location,
       notes: notes || null,
       startTime: shiftStart,
       endTime: shiftEnd,
@@ -333,8 +335,8 @@ async function updateShiftAction(formData: FormData) {
   await requireManagerSession()
 
   const shiftId = String(formData.get('shiftId') ?? '')
-  const title = String(formData.get('title') ?? '').trim()
-  const location = String(formData.get('location') ?? '').trim()
+  const title = DEFAULT_SHIFT_TITLE
+  const location = DEFAULT_SHIFT_LOCATION
   const notes = String(formData.get('notes') ?? '').trim()
   const shiftDate = String(formData.get('shiftDate') ?? '')
   const startTime = String(formData.get('startTime') ?? '')
@@ -343,7 +345,7 @@ async function updateShiftAction(formData: FormData) {
   const requestedStatus = String(formData.get('status') ?? 'published')
   const status = requestedStatus === 'draft' || requestedStatus === 'cancelled' ? requestedStatus : 'published'
 
-  if (!shiftId || !title || !shiftDate || !startTime || !endTime) {
+  if (!shiftId || !shiftDate || !startTime || !endTime) {
     redirect('/admin?error=edit-missing-fields#upcoming-shifts')
   }
 
@@ -360,7 +362,7 @@ async function updateShiftAction(formData: FormData) {
 
   const updatedShift = await db.update(shifts).set({
     title,
-    location: location || null,
+    location,
     notes: notes || null,
     startTime: startDateTime,
     endTime: endDateTime,
@@ -1321,7 +1323,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             ) : null}
             {formError === 'missing-fields' ? (
               <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                Title, date, start time, and end time are required.
+                Date, start time, and end time are required.
               </div>
             ) : null}
             {formError === 'invalid-time' ? (
@@ -1334,15 +1336,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 Store closes at 8:00 PM. Shifts must end by 8:00 PM.
               </div>
             ) : null}
+            <p className="text-sm text-muted-foreground">
+              Shift type and location are fixed to <span className="font-medium">{DEFAULT_SHIFT_TITLE}</span> at <span className="font-medium">{DEFAULT_SHIFT_LOCATION}</span>.
+            </p>
             <form action={createShiftAction} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              <div className="space-y-2 xl:col-span-1">
-                <label htmlFor="title" className="text-sm font-medium">Shift Title</label>
-                <Input id="title" name="title" placeholder="Evening Front Desk" required />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="location" className="text-sm font-medium">Location</label>
-                <Input id="location" name="location" placeholder="Main Store" />
-              </div>
               <div className="space-y-2">
                 <label htmlFor="assignedUserId" className="text-sm font-medium">Assign To (Optional)</label>
                 <select
@@ -1361,15 +1358,15 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </div>
               <div className="space-y-2">
                 <label htmlFor="shiftDate" className="text-sm font-medium">Date</label>
-                <Input id="shiftDate" name="shiftDate" type="date" required />
+                <DatePickerField id="shiftDate" name="shiftDate" required />
               </div>
               <div className="space-y-2">
                 <label htmlFor="startTime" className="text-sm font-medium">Start Time</label>
-                <Input id="startTime" name="startTime" type="time" max="19:59" required />
+                <TimePickerField id="startTime" name="startTime" max="19:59" required />
               </div>
               <div className="space-y-2">
                 <label htmlFor="endTime" className="text-sm font-medium">End Time</label>
-                <Input id="endTime" name="endTime" type="time" max="20:00" required />
+                <TimePickerField id="endTime" name="endTime" max="20:00" required />
               </div>
               <div className="space-y-2 xl:col-span-2">
                 <label htmlFor="notes" className="text-sm font-medium">Notes (Optional)</label>
@@ -1414,7 +1411,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             ) : null}
             {formError === 'bulk-missing-fields' ? (
               <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                Title, start date, start time, and end time are required.
+                Start date, start time, and end time are required.
               </div>
             ) : null}
             {formError === 'bulk-no-days-selected' ? (
@@ -1452,16 +1449,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 No shifts matched the selected weekdays inside that range.
               </div>
             ) : null}
+            <p className="text-sm text-muted-foreground">
+              Shift type and location are fixed to <span className="font-medium">{DEFAULT_SHIFT_TITLE}</span> at <span className="font-medium">{DEFAULT_SHIFT_LOCATION}</span>.
+            </p>
 
             <form action={createBulkScheduleAction} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label htmlFor="bulk-title" className="text-sm font-medium">Shift Title</label>
-                <Input id="bulk-title" name="title" placeholder="Evening Front Desk" required />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="bulk-location" className="text-sm font-medium">Location</label>
-                <Input id="bulk-location" name="location" placeholder="Main Store" />
-              </div>
               <div className="space-y-2">
                 <label htmlFor="bulk-assignedUserId" className="text-sm font-medium">Assign To (Optional)</label>
                 <select
@@ -1480,7 +1472,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </div>
               <div className="space-y-2">
                 <label htmlFor="bulk-startDate" className="text-sm font-medium">Start Date</label>
-                <Input id="bulk-startDate" name="startDate" type="date" required />
+                <DatePickerField id="bulk-startDate" name="startDate" required />
               </div>
               <div className="space-y-2">
                 <label htmlFor="bulk-rangePreset" className="text-sm font-medium">Range</label>
@@ -1497,16 +1489,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </div>
               <div className="space-y-2">
                 <label htmlFor="bulk-endDate" className="text-sm font-medium">Custom End Date</label>
-                <Input id="bulk-endDate" name="endDate" type="date" />
+                <DatePickerField id="bulk-endDate" name="endDate" />
                 <p className="text-xs text-muted-foreground">Only used when Range is set to Custom end date.</p>
               </div>
               <div className="space-y-2">
                 <label htmlFor="bulk-startTime" className="text-sm font-medium">Start Time</label>
-                <Input id="bulk-startTime" name="startTime" type="time" max="19:59" required />
+                <TimePickerField id="bulk-startTime" name="startTime" max="19:59" required />
               </div>
               <div className="space-y-2">
                 <label htmlFor="bulk-endTime" className="text-sm font-medium">End Time</label>
-                <Input id="bulk-endTime" name="endTime" type="time" max="20:00" required />
+                <TimePickerField id="bulk-endTime" name="endTime" max="20:00" required />
               </div>
               <div className="space-y-2 xl:col-span-3">
                 <label className="text-sm font-medium">Repeat On</label>
@@ -1568,7 +1560,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           ) : null}
           {formError === 'edit-missing-fields' ? (
             <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Shift title, date, start time, and end time are required.
+              Shift date, start time, and end time are required.
             </div>
           ) : null}
           {formError === 'edit-invalid-time' ? (
@@ -1640,23 +1632,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             <form action={updateShiftAction} className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                               <input type="hidden" name="shiftId" value={shift.id} />
                               <div className="space-y-1">
-                                <label htmlFor={`shift-title-${shift.id}`} className="text-xs font-medium">Title</label>
-                                <Input
-                                  id={`shift-title-${shift.id}`}
-                                  name="title"
-                                  defaultValue={shift.title}
-                                  required
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label htmlFor={`shift-location-${shift.id}`} className="text-xs font-medium">Location</label>
-                                <Input
-                                  id={`shift-location-${shift.id}`}
-                                  name="location"
-                                  defaultValue={shift.location ?? ''}
-                                />
-                              </div>
-                              <div className="space-y-1">
                                 <label htmlFor={`shift-assignee-${shift.id}`} className="text-xs font-medium">Assign To</label>
                                 <select
                                   id={`shift-assignee-${shift.id}`}
@@ -1674,20 +1649,18 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                               </div>
                               <div className="space-y-1">
                                 <label htmlFor={`shift-date-${shift.id}`} className="text-xs font-medium">Date</label>
-                                <Input
+                                <DatePickerField
                                   id={`shift-date-${shift.id}`}
                                   name="shiftDate"
-                                  type="date"
                                   defaultValue={formatDateInput(shift.startTime)}
                                   required
                                 />
                               </div>
                               <div className="space-y-1">
                                 <label htmlFor={`shift-start-${shift.id}`} className="text-xs font-medium">Start</label>
-                                <Input
+                                <TimePickerField
                                   id={`shift-start-${shift.id}`}
                                   name="startTime"
-                                  type="time"
                                   max="19:59"
                                   defaultValue={formatTimeInput(shift.startTime)}
                                   required
@@ -1695,10 +1668,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                               </div>
                               <div className="space-y-1">
                                 <label htmlFor={`shift-end-${shift.id}`} className="text-xs font-medium">End</label>
-                                <Input
+                                <TimePickerField
                                   id={`shift-end-${shift.id}`}
                                   name="endTime"
-                                  type="time"
                                   max="20:00"
                                   defaultValue={formatTimeInput(shift.endTime)}
                                   required
