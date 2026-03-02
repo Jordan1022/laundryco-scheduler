@@ -1044,8 +1044,13 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   const now = new Date()
   const { start: weekStart, end: weekEnd } = getWeekBounds(now)
+  const formStatus = getQueryValue(searchParams?.status)
+  const formError = getQueryValue(searchParams?.error)
+  const openShiftId = getQueryValue(searchParams?.openShiftId)
+  const countValue = Number(getQueryValue(searchParams?.count) ?? 0)
+  const createdBulkCount = Number.isFinite(countValue) && countValue > 0 ? Math.floor(countValue) : 0
 
-  const [staffRows, upcomingShiftRows, weekShiftRows, pendingTimeOffRows, pendingSwapRows] = await Promise.all([
+  const [staffRows, upcomingShiftBaseRows, weekShiftRows, pendingTimeOffRows, pendingSwapRows] = await Promise.all([
     db.select({
       id: users.id,
       name: users.name,
@@ -1092,6 +1097,22 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       .orderBy(desc(shiftSwapRequests.createdAt))
       .limit(8),
   ])
+  const upcomingShiftRows = [...upcomingShiftBaseRows]
+  if (openShiftId && !upcomingShiftRows.some((shift) => shift.id === openShiftId)) {
+    const [requestedShift] = await db.select({
+      id: shifts.id,
+      title: shifts.title,
+      location: shifts.location,
+      notes: shifts.notes,
+      startTime: shifts.startTime,
+      endTime: shifts.endTime,
+      status: shifts.status,
+    }).from(shifts).where(eq(shifts.id, openShiftId)).limit(1)
+
+    if (requestedShift) {
+      upcomingShiftRows.unshift(requestedShift)
+    }
+  }
 
   const shiftIds = [...new Set([...upcomingShiftRows.map((shift) => shift.id), ...weekShiftRows.map((shift) => shift.id)])]
   const swapAssignmentIds = pendingSwapRows.map((swap) => swap.assignmentId)
@@ -1156,11 +1177,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   const schedulableStaffRows = staffRows.filter((staff) => staff.role !== 'inactive')
   const activeStaff = schedulableStaffRows
-  const formStatus = getQueryValue(searchParams?.status)
-  const formError = getQueryValue(searchParams?.error)
-  const openShiftId = getQueryValue(searchParams?.openShiftId)
-  const countValue = Number(getQueryValue(searchParams?.count) ?? 0)
-  const createdBulkCount = Number.isFinite(countValue) && countValue > 0 ? Math.floor(countValue) : 0
   const pendingRequestsCount = pendingTimeOffRows.length + pendingSwapRows.length
   const unfilledUpcomingShifts = upcomingShiftRows.filter((shift) => {
     if (shift.status === 'cancelled') return false

@@ -150,7 +150,7 @@ export default function ScheduleGridWithModal({
                       </div>
                       {canManageStaff ? (
                         <Button asChild size="sm" variant="outline">
-                          <Link href={`/admin?openShiftId=${shift.shiftId}#shift-${shift.shiftId}`}>
+                          <Link href={`/admin?openShiftId=${shift.shiftId}#upcoming-shifts`}>
                             View / Edit
                           </Link>
                         </Button>
