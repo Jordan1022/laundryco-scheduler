@@ -19,6 +19,16 @@ const timeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2
 const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 const CLOSING_TIME_MINUTES = 20 * 60 // 8:00 PM
 const ACTIVE_ROLES = ['employee', 'manager', 'admin'] as const
+const WEEKDAY_OPTIONS = [
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+  { value: 0, label: 'Sun' },
+] as const
+const MAX_BULK_RANGE_DAYS = 93
 
 type ActiveRole = typeof ACTIVE_ROLES[number]
 
@@ -84,6 +94,30 @@ function formatTimeInput(date: Date) {
 function getQueryValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0]
   return value
+}
+
+function parseDateOnly(value: string) {
+  if (!value) return null
+  const parsed = new Date(`${value}T00:00`)
+  if (Number.isNaN(parsed.getTime())) return null
+  parsed.setHours(0, 0, 0, 0)
+  return parsed
+}
+
+function plusDays(base: Date, days: number) {
+  const date = new Date(base)
+  date.setDate(date.getDate() + days)
+  return date
+}
+
+function endDateFromPreset(startDate: Date, rangePreset: string, customEndDateRaw: string) {
+  if (rangePreset === 'custom') {
+    return parseDateOnly(customEndDateRaw)
+  }
+  if (rangePreset === 'month') {
+    return plusDays(startDate, 29)
+  }
+  return plusDays(startDate, 6)
 }
 
 async function requireManagerSession() {
@@ -163,6 +197,134 @@ async function createShiftAction(formData: FormData) {
   }
 
   redirect('/admin?status=shift-created#create-shift')
+}
+
+async function createBulkScheduleAction(formData: FormData) {
+  'use server'
+
+  const session = await requireManagerSession()
+
+  const title = String(formData.get('title') ?? '').trim()
+  const location = String(formData.get('location') ?? '').trim()
+  const notes = String(formData.get('notes') ?? '').trim()
+  const startDateRaw = String(formData.get('startDate') ?? '')
+  const customEndDateRaw = String(formData.get('endDate') ?? '')
+  const rangePreset = String(formData.get('rangePreset') ?? 'week')
+  const startTime = String(formData.get('startTime') ?? '')
+  const endTime = String(formData.get('endTime') ?? '')
+  const assignedUserId = String(formData.get('assignedUserId') ?? '')
+  const requestedStatus = String(formData.get('status') ?? 'published')
+  const status = requestedStatus === 'draft' ? 'draft' : 'published'
+
+  if (!title || !startDateRaw || !startTime || !endTime) {
+    redirect('/admin?error=bulk-missing-fields#bulk-schedule')
+  }
+
+  const selectedDays = new Set<number>()
+  for (const rawDay of formData.getAll('daysOfWeek')) {
+    const day = Number(rawDay)
+    if (Number.isInteger(day) && day >= 0 && day <= 6) {
+      selectedDays.add(day)
+    }
+  }
+  if (selectedDays.size === 0) {
+    redirect('/admin?error=bulk-no-days-selected#bulk-schedule')
+  }
+
+  const startDate = parseDateOnly(startDateRaw)
+  const endDate = startDate ? endDateFromPreset(startDate, rangePreset, customEndDateRaw) : null
+  if (!startDate || !endDate || endDate < startDate) {
+    redirect('/admin?error=bulk-invalid-range#bulk-schedule')
+  }
+
+  const dayCount = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+  if (dayCount > MAX_BULK_RANGE_DAYS) {
+    redirect('/admin?error=bulk-range-too-large#bulk-schedule')
+  }
+
+  const startMinutes = parseTimeToMinutes(startTime)
+  const endMinutes = parseTimeToMinutes(endTime)
+  if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
+    redirect('/admin?error=bulk-invalid-time#bulk-schedule')
+  }
+  if (startMinutes >= CLOSING_TIME_MINUTES || endMinutes > CLOSING_TIME_MINUTES) {
+    redirect('/admin?error=bulk-after-hours#bulk-schedule')
+  }
+
+  if (assignedUserId) {
+    const [assignedUser] = await db.select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, assignedUserId), ne(users.role, 'inactive')))
+      .limit(1)
+
+    if (!assignedUser) {
+      redirect('/admin?error=bulk-invalid-assignee#bulk-schedule')
+    }
+  }
+
+  const shiftInputs: {
+    title: string
+    location: string | null
+    notes: string | null
+    startTime: Date
+    endTime: Date
+    status: 'draft' | 'published'
+    createdBy: string
+  }[] = []
+
+  for (let cursor = new Date(startDate); cursor <= endDate; cursor = plusDays(cursor, 1)) {
+    if (!selectedDays.has(cursor.getDay())) continue
+
+    const dateValue = formatDateInput(cursor)
+    const shiftStart = parseLocalDateTime(dateValue, startTime)
+    const shiftEnd = parseLocalDateTime(dateValue, endTime)
+    if (!shiftStart || !shiftEnd || shiftEnd <= shiftStart) continue
+
+    shiftInputs.push({
+      title,
+      location: location || null,
+      notes: notes || null,
+      startTime: shiftStart,
+      endTime: shiftEnd,
+      status,
+      createdBy: session.user.id,
+    })
+  }
+
+  if (shiftInputs.length === 0) {
+    redirect('/admin?error=bulk-no-matching-days#bulk-schedule')
+  }
+
+  const insertedShifts = await db.transaction(async (tx) => {
+    const created = await tx.insert(shifts).values(shiftInputs).returning({
+      id: shifts.id,
+      startTime: shifts.startTime,
+      endTime: shifts.endTime,
+    })
+
+    if (assignedUserId && created.length > 0) {
+      await tx.insert(assignments).values(created.map((shift) => ({
+        shiftId: shift.id,
+        userId: assignedUserId,
+        status: 'assigned',
+      })))
+    }
+
+    return created
+  })
+
+  if (assignedUserId && status !== 'draft' && insertedShifts.length > 0) {
+    const firstShift = insertedShifts[0]
+    const lastShift = insertedShifts[insertedShifts.length - 1]
+    await notifyUsers([{
+      userId: assignedUserId,
+      title: 'Recurring shifts assigned',
+      body: `You were assigned to ${insertedShifts.length} shifts from ${formatShiftDateTime(firstShift.startTime, firstShift.endTime)} to ${formatShiftDateTime(lastShift.startTime, lastShift.endTime)}.`,
+      link: '/dashboard',
+    }])
+  }
+
+  redirect(`/admin?status=bulk-shifts-created&count=${insertedShifts.length}#bulk-schedule`)
 }
 
 async function updateShiftAction(formData: FormData) {
@@ -868,6 +1030,7 @@ type AdminPageProps = {
   searchParams?: {
     status?: string | string[]
     error?: string | string[]
+    count?: string | string[]
   }
 }
 
@@ -990,6 +1153,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const activeStaff = schedulableStaffRows
   const formStatus = getQueryValue(searchParams?.status)
   const formError = getQueryValue(searchParams?.error)
+  const countValue = Number(getQueryValue(searchParams?.count) ?? 0)
+  const createdBulkCount = Number.isFinite(countValue) && countValue > 0 ? Math.floor(countValue) : 0
   const pendingRequestsCount = pendingTimeOffRows.length + pendingSwapRows.length
   const unfilledUpcomingShifts = upcomingShiftRows.filter((shift) => {
     if (shift.status === 'cancelled') return false
@@ -1096,11 +1261,17 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <CardHeader>
             <CardTitle className="text-lg">Quick Actions</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <Button asChild className="justify-start bg-[#1e3a8a] hover:bg-[#172b6d]">
               <Link href="#create-shift">
               <CalendarPlus className="mr-2 h-4 w-4" />
               Create Shift
+              </Link>
+            </Button>
+            <Button asChild className="justify-start" variant="outline">
+              <Link href="#bulk-schedule">
+                <CalendarDays className="mr-2 h-4 w-4" />
+                Bulk Schedule
               </Link>
             </Button>
             <Button asChild className="justify-start" variant="outline">
@@ -1221,6 +1392,154 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="md:col-span-2 xl:col-span-3 flex justify-end">
                 <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">
                   Save Shift
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card id="bulk-schedule">
+          <CardHeader>
+            <CardTitle className="text-lg">Bulk Schedule Creator</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {formStatus === 'bulk-shifts-created' ? (
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                Created {createdBulkCount} shifts.
+              </div>
+            ) : null}
+            {formError === 'bulk-missing-fields' ? (
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                Title, start date, start time, and end time are required.
+              </div>
+            ) : null}
+            {formError === 'bulk-no-days-selected' ? (
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                Select at least one weekday to schedule.
+              </div>
+            ) : null}
+            {formError === 'bulk-invalid-range' ? (
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                Date range is invalid. For custom ranges, set an end date on or after the start date.
+              </div>
+            ) : null}
+            {formError === 'bulk-range-too-large' ? (
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                Bulk range is too large. Keep it to 93 days or fewer.
+              </div>
+            ) : null}
+            {formError === 'bulk-invalid-time' ? (
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                End time must be after start time.
+              </div>
+            ) : null}
+            {formError === 'bulk-after-hours' ? (
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                Store closes at 8:00 PM. Shifts must end by 8:00 PM.
+              </div>
+            ) : null}
+            {formError === 'bulk-invalid-assignee' ? (
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                The selected staff member does not exist or is inactive.
+              </div>
+            ) : null}
+            {formError === 'bulk-no-matching-days' ? (
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                No shifts matched the selected weekdays inside that range.
+              </div>
+            ) : null}
+
+            <form action={createBulkScheduleAction} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label htmlFor="bulk-title" className="text-sm font-medium">Shift Title</label>
+                <Input id="bulk-title" name="title" placeholder="Evening Front Desk" required />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="bulk-location" className="text-sm font-medium">Location</label>
+                <Input id="bulk-location" name="location" placeholder="Main Store" />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="bulk-assignedUserId" className="text-sm font-medium">Assign To (Optional)</label>
+                <select
+                  id="bulk-assignedUserId"
+                  name="assignedUserId"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  defaultValue=""
+                >
+                  <option value="">Unassigned</option>
+                  {schedulableStaffRows.map((staff) => (
+                    <option key={staff.id} value={staff.id}>
+                      {staff.name} ({staff.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="bulk-startDate" className="text-sm font-medium">Start Date</label>
+                <Input id="bulk-startDate" name="startDate" type="date" required />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="bulk-rangePreset" className="text-sm font-medium">Range</label>
+                <select
+                  id="bulk-rangePreset"
+                  name="rangePreset"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  defaultValue="week"
+                >
+                  <option value="week">1 week</option>
+                  <option value="month">1 month</option>
+                  <option value="custom">Custom end date</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="bulk-endDate" className="text-sm font-medium">Custom End Date</label>
+                <Input id="bulk-endDate" name="endDate" type="date" />
+                <p className="text-xs text-muted-foreground">Only used when Range is set to Custom end date.</p>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="bulk-startTime" className="text-sm font-medium">Start Time</label>
+                <Input id="bulk-startTime" name="startTime" type="time" max="19:59" required />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="bulk-endTime" className="text-sm font-medium">End Time</label>
+                <Input id="bulk-endTime" name="endTime" type="time" max="20:00" required />
+              </div>
+              <div className="space-y-2 xl:col-span-3">
+                <label className="text-sm font-medium">Repeat On</label>
+                <div className="flex flex-wrap gap-2">
+                  {WEEKDAY_OPTIONS.map((day) => (
+                    <label key={day.value} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm bg-white">
+                      <input type="checkbox" name="daysOfWeek" value={day.value} className="h-4 w-4" />
+                      <span>{day.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2 xl:col-span-2">
+                <label htmlFor="bulk-notes" className="text-sm font-medium">Notes (Optional)</label>
+                <textarea
+                  id="bulk-notes"
+                  name="notes"
+                  rows={3}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  placeholder="Optional notes for all generated shifts..."
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="bulk-status" className="text-sm font-medium">Status</label>
+                <select
+                  id="bulk-status"
+                  name="status"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  defaultValue="published"
+                >
+                  <option value="published">Published</option>
+                  <option value="draft">Draft</option>
+                </select>
+              </div>
+              <div className="md:col-span-2 xl:col-span-3 flex justify-end">
+                <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">
+                  Create Bulk Schedule
                 </Button>
               </div>
             </form>

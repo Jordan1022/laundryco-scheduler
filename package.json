@@ -12,7 +12,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "create-user": "tsx scripts/create-user.ts",
-    "generate:vapid": "node scripts/generate-vapid-keys.mjs"
+    "generate:vapid": "node scripts/generate-vapid-keys.mjs",
+    "env:check": "node scripts/check-env.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.0.2",

@@ -63,6 +63,11 @@ VAPID_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 VAPID_SUBJECT="mailto:admin@laundryco.com"
 ```
 
+Validate env setup:
+```bash
+npm run env:check
+```
+
 Generate VAPID keys:
 ```bash
 npm run generate:vapid
