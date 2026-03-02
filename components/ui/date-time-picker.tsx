@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import { CalendarDays, Clock3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -62,6 +62,48 @@ function timeBoundary(value: string | undefined, fallback: string) {
   return parseTimeValue(value) ?? fallbackTime ?? new Date()
 }
 
+function useMobilePortal() {
+  const [usePortal, setUsePortal] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const smallScreen = window.matchMedia('(max-width: 768px)')
+    const coarsePointer = window.matchMedia('(pointer: coarse)')
+    const legacySmall = smallScreen as MediaQueryList & {
+      addListener?: (callback: (event: MediaQueryListEvent) => void) => void
+      removeListener?: (callback: (event: MediaQueryListEvent) => void) => void
+    }
+    const legacyCoarse = coarsePointer as MediaQueryList & {
+      addListener?: (callback: (event: MediaQueryListEvent) => void) => void
+      removeListener?: (callback: (event: MediaQueryListEvent) => void) => void
+    }
+    const update = () => {
+      setUsePortal(smallScreen.matches || coarsePointer.matches)
+    }
+
+    update()
+    if (typeof smallScreen.addEventListener === 'function') {
+      smallScreen.addEventListener('change', update)
+      coarsePointer.addEventListener('change', update)
+    } else {
+      legacySmall.addListener?.(update)
+      legacyCoarse.addListener?.(update)
+    }
+    return () => {
+      if (typeof smallScreen.removeEventListener === 'function') {
+        smallScreen.removeEventListener('change', update)
+        coarsePointer.removeEventListener('change', update)
+      } else {
+        legacySmall.removeListener?.(update)
+        legacyCoarse.removeListener?.(update)
+      }
+    }
+  }, [])
+
+  return usePortal
+}
+
 export function DatePickerField({
   id,
   name,
@@ -74,6 +116,7 @@ export function DatePickerField({
   const [selected, setSelected] = useState<Date | null>(() => parseISODateOnly(defaultValue))
   const minDate = useMemo(() => parseISODateOnly(min), [min])
   const maxDate = useMemo(() => parseISODateOnly(max), [max])
+  const withMobilePortal = useMobilePortal()
 
   return (
     <div className={cn('relative', className)}>
@@ -88,7 +131,10 @@ export function DatePickerField({
         dateFormat="yyyy-MM-dd"
         placeholderText="YYYY-MM-DD"
         autoComplete="off"
+        readOnly
+        preventOpenOnFocus
         showPopperArrow={false}
+        withPortal={withMobilePortal}
         className={pickerInputClassName}
         wrapperClassName="w-full app-datepicker-wrapper"
         popperClassName="app-datepicker-popper"
@@ -112,6 +158,7 @@ export function TimePickerField({
   const [selected, setSelected] = useState<Date | null>(() => parseTimeValue(defaultValue))
   const minTime = useMemo(() => timeBoundary(min, '00:00'), [min])
   const maxTime = useMemo(() => timeBoundary(max, '23:59'), [max])
+  const withMobilePortal = useMobilePortal()
 
   return (
     <div className={cn('relative', className)}>
@@ -129,7 +176,10 @@ export function TimePickerField({
         dateFormat="HH:mm"
         placeholderText="HH:MM"
         autoComplete="off"
+        readOnly
+        preventOpenOnFocus
         showPopperArrow={false}
+        withPortal={withMobilePortal}
         className={pickerInputClassName}
         wrapperClassName="w-full app-datepicker-wrapper"
         popperClassName="app-datepicker-popper"
