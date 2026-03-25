@@ -131,8 +131,6 @@ export function DatePickerField({
         dateFormat="yyyy-MM-dd"
         placeholderText="YYYY-MM-DD"
         autoComplete="off"
-        readOnly
-        preventOpenOnFocus
         showPopperArrow={false}
         withPortal={withMobilePortal}
         className={pickerInputClassName}
@@ -140,7 +138,7 @@ export function DatePickerField({
         popperClassName="app-datepicker-popper"
         calendarClassName="app-datepicker-calendar"
       />
-      <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <CalendarDays className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
     </div>
   )
 }
@@ -176,8 +174,6 @@ export function TimePickerField({
         dateFormat="HH:mm"
         placeholderText="HH:MM"
         autoComplete="off"
-        readOnly
-        preventOpenOnFocus
         showPopperArrow={false}
         withPortal={withMobilePortal}
         className={pickerInputClassName}
@@ -185,7 +181,7 @@ export function TimePickerField({
         popperClassName="app-datepicker-popper"
         calendarClassName="app-datepicker-calendar"
       />
-      <Clock3 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Clock3 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
     </div>
   )
 }
