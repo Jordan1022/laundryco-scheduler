@@ -44,11 +44,12 @@ export default function ThemeToggle() {
       variant="outline"
       size="sm"
       onClick={toggleTheme}
-      className="fixed top-4 right-4 z-50 bg-background/95 shadow-md backdrop-blur supports-[backdrop-filter]:bg-background/80"
+      className="fixed bottom-4 right-4 z-40 rounded-full bg-background/95 px-3 shadow-lg shadow-slate-900/10 backdrop-blur supports-[backdrop-filter]:bg-background/80"
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
       {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      <span className="ml-2 hidden sm:inline">{isDark ? 'Light mode' : 'Dark mode'}</span>
     </Button>
   )
 }

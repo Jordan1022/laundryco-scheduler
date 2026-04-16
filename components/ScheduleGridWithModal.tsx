@@ -57,14 +57,68 @@ export default function ScheduleGridWithModal({
 }: ScheduleGridWithModalProps) {
   const [activeDayKey, setActiveDayKey] = useState<string | null>(null)
   const activeDay = useMemo(() => dayEntries.find((day) => day.key === activeDayKey) ?? null, [activeDayKey, dayEntries])
+  const mobileDayEntries = useMemo(
+    () => (selectedView === 'month' ? dayEntries.filter((day) => day.isCurrentMonth) : dayEntries),
+    [dayEntries, selectedView],
+  )
 
   return (
     <>
-      <div className="-mx-2 overflow-x-auto px-2">
+      <div className="space-y-4 md:hidden">
+        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-3 text-sm text-muted-foreground">
+          {selectedView === 'month'
+            ? 'Month view switches to a day-by-day agenda on phones so you can scan shifts without sideways scrolling.'
+            : 'Week view is shown as a day-by-day agenda on phones. Tap any day to open full shift details.'}
+        </div>
+        <div className="space-y-3">
+          {mobileDayEntries.map((day) => (
+            <button
+              key={day.key}
+              type="button"
+              onClick={() => setActiveDayKey(day.key)}
+              className={cn(
+                'w-full rounded-xl border bg-card p-4 text-left shadow-sm transition-colors hover:border-blue-300',
+                day.isToday && 'border-blue-200 bg-blue-50/40',
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">{day.dateLabel}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {day.shiftCount === 0 ? 'No shifts scheduled' : `${day.shiftCount} shift${day.shiftCount === 1 ? '' : 's'} scheduled`}
+                  </p>
+                </div>
+                {day.isToday ? (
+                  <span className="rounded-full bg-[#1e3a8a] px-2.5 py-1 text-[11px] font-semibold text-white">
+                    Today
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-3 space-y-2">
+                {day.visibleShifts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Tap to review this day and add details.</p>
+                ) : (
+                  day.visibleShifts.map((shift) => (
+                    <div key={shift.shiftId} className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                      <p className="text-xs font-semibold text-blue-900">{shift.startLabel}-{shift.endLabel}</p>
+                      <p className="text-sm text-blue-900">{shift.title}</p>
+                    </div>
+                  ))
+                )}
+                {day.hiddenShiftCount > 0 ? (
+                  <p className="text-xs font-medium text-muted-foreground">+{day.hiddenShiftCount} more on this day</p>
+                ) : null}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="-mx-2 hidden overflow-x-auto px-2 md:block">
         <div className={cn(selectedView === 'week' ? 'min-w-[720px]' : 'min-w-[760px]')}>
-          <div className="grid grid-cols-7 gap-2 mb-2">
+          <div className="mb-2 grid grid-cols-7 gap-2">
             {weekdayLabels.map((label) => (
-              <div key={label} className="text-xs font-semibold text-muted-foreground uppercase tracking-wide text-center py-1">
+              <div key={label} className="py-1 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {label}
               </div>
             ))}

@@ -16,6 +16,7 @@ type DatePickerFieldProps = {
   name: string
   defaultValue?: string
   required?: boolean
+  disabled?: boolean
   className?: string
   min?: string
   max?: string
@@ -32,7 +33,7 @@ type TimePickerFieldProps = {
   timeIntervals?: number
 }
 
-function parseISODateOnly(value?: string) {
+export function parseISODateOnly(value?: string) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
   const [yearRaw, monthRaw, dayRaw] = value.split('-')
   const year = Number(yearRaw)
@@ -45,7 +46,7 @@ function parseISODateOnly(value?: string) {
   return parsed
 }
 
-function parseTimeValue(value?: string) {
+export function parseTimeValue(value?: string) {
   if (!value || !/^\d{2}:\d{2}$/.test(value)) return null
   const [hourRaw, minuteRaw] = value.split(':')
   const hour = Number(hourRaw)
@@ -109,6 +110,7 @@ export function DatePickerField({
   name,
   defaultValue,
   required,
+  disabled,
   className,
   min,
   max,
@@ -126,6 +128,7 @@ export function DatePickerField({
         selected={selected}
         onChange={(nextDate: Date | null) => setSelected(nextDate)}
         required={required}
+        disabled={disabled}
         minDate={minDate ?? undefined}
         maxDate={maxDate ?? undefined}
         dateFormat="yyyy-MM-dd"
