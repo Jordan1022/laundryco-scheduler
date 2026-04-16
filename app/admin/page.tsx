@@ -9,8 +9,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DatePickerField, TimePickerField } from '@/components/ui/date-time-picker'
 import TempPasswordField from '@/components/TempPasswordField'
+import BulkRangeFields from '@/components/BulkRangeFields'
+import ConfirmSubmitButton from '@/components/ConfirmSubmitButton'
+import AdminTabs, { resolveAdminTab } from '@/components/AdminTabs'
+import AdminToast from '@/components/AdminToast'
+import { Drawer } from '@/components/ui/drawer'
 import { cn } from '@/lib/utils'
-import { CalendarDays, CalendarPlus, CheckSquare, UserPlus, Users } from 'lucide-react'
+import { CalendarDays, CalendarPlus, CheckSquare, Pencil, Phone, Plus, UserPlus } from 'lucide-react'
 import SignOutButton from '@/components/SignOutButton'
 import bcrypt from 'bcryptjs'
 import { notifyUsers } from '@/lib/notifications'
@@ -1036,7 +1041,290 @@ type AdminPageProps = {
     error?: string | string[]
     count?: string | string[]
     openShiftId?: string | string[]
+    openStaffId?: string | string[]
+    tab?: string | string[]
+    create?: string | string[]
   }
+}
+
+type ShiftRow = {
+  id: string
+  title: string
+  location: string | null
+  notes: string | null
+  startTime: Date
+  endTime: Date
+  status: string | null
+}
+
+type StaffRow = {
+  id: string
+  name: string
+  email: string
+  phone: string | null
+  role: string
+}
+
+function ShiftEditDrawer({
+  shift,
+  assignedUserId,
+  staff,
+  initialOpen,
+}: {
+  shift: ShiftRow
+  assignedUserId: string
+  staff: StaffRow[]
+  initialOpen: boolean
+}) {
+  return (
+    <Drawer
+      title={`Edit shift — ${dateLabel.format(shift.startTime)}`}
+      description={`${timeLabel.format(shift.startTime)} – ${timeLabel.format(shift.endTime)}`}
+      initialOpen={initialOpen}
+      trigger={
+        <Button size="sm" variant="outline">
+          <Pencil className="mr-1 h-3.5 w-3.5" />
+          Edit
+        </Button>
+      }
+    >
+      <form action={updateShiftAction} className="space-y-4">
+        <input type="hidden" name="shiftId" value={shift.id} />
+        <div className="space-y-1.5">
+          <label htmlFor={`shift-assignee-${shift.id}`} className="text-sm font-medium">Assign to</label>
+          <select
+            id={`shift-assignee-${shift.id}`}
+            name="assignedUserId"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            defaultValue={assignedUserId}
+          >
+            <option value="">Unassigned</option>
+            {staff.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.role})
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor={`shift-date-${shift.id}`} className="text-sm font-medium">Date</label>
+          <DatePickerField
+            id={`shift-date-${shift.id}`}
+            name="shiftDate"
+            defaultValue={formatDateInput(shift.startTime)}
+            required
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label htmlFor={`shift-start-${shift.id}`} className="text-sm font-medium">Start</label>
+            <TimePickerField
+              id={`shift-start-${shift.id}`}
+              name="startTime"
+              max="19:59"
+              defaultValue={formatTimeInput(shift.startTime)}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor={`shift-end-${shift.id}`} className="text-sm font-medium">End</label>
+            <TimePickerField
+              id={`shift-end-${shift.id}`}
+              name="endTime"
+              max="20:00"
+              defaultValue={formatTimeInput(shift.endTime)}
+              required
+            />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor={`shift-notes-${shift.id}`} className="text-sm font-medium">Notes</label>
+          <textarea
+            id={`shift-notes-${shift.id}`}
+            name="notes"
+            rows={3}
+            defaultValue={shift.notes ?? ''}
+            className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor={`shift-status-${shift.id}`} className="text-sm font-medium">Status</label>
+          <select
+            id={`shift-status-${shift.id}`}
+            name="status"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            defaultValue={shift.status === 'draft' || shift.status === 'cancelled' ? shift.status : 'published'}
+          >
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">Save Changes</Button>
+        </div>
+      </form>
+
+      <form action={setShiftCancelledAction} className="mt-4 border-t pt-4 flex justify-end">
+        <input type="hidden" name="shiftId" value={shift.id} />
+        <input type="hidden" name="mode" value={shift.status === 'cancelled' ? 'restore' : 'cancel'} />
+        <ConfirmSubmitButton
+          type="submit"
+          size="sm"
+          variant={shift.status === 'cancelled' ? 'outline' : 'destructive'}
+          confirmMessage={
+            shift.status === 'cancelled'
+              ? `Restore ${shift.title} on ${dateLabel.format(shift.startTime)}?`
+              : `Cancel ${shift.title} on ${dateLabel.format(shift.startTime)}? Assigned staff will be notified.`
+          }
+        >
+          {shift.status === 'cancelled' ? 'Restore Shift' : 'Cancel Shift'}
+        </ConfirmSubmitButton>
+      </form>
+    </Drawer>
+  )
+}
+
+function StaffEditDrawer({
+  staff,
+  currentUserId,
+  initialOpen,
+}: {
+  staff: StaffRow
+  currentUserId: string
+  initialOpen: boolean
+}) {
+  return (
+    <Drawer
+      title={staff.name}
+      description={staff.email}
+      initialOpen={initialOpen}
+      trigger={
+        <Button size="sm" variant="outline">
+          <Pencil className="mr-1 h-3.5 w-3.5" />
+          Manage
+        </Button>
+      }
+    >
+      <div className="space-y-6">
+        <form action={updateStaffProfileAction} className="space-y-3">
+          <input type="hidden" name="userId" value={staff.id} />
+          <p className="text-sm font-semibold">Profile</p>
+          <div className="space-y-1.5">
+            <label htmlFor={`staff-name-${staff.id}`} className="text-sm font-medium">Name</label>
+            <Input id={`staff-name-${staff.id}`} name="name" defaultValue={staff.name} required />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor={`staff-email-${staff.id}`} className="text-sm font-medium">Email</label>
+            <Input id={`staff-email-${staff.id}`} name="email" type="email" defaultValue={staff.email} required />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor={`staff-phone-${staff.id}`} className="text-sm font-medium">Phone</label>
+            <Input id={`staff-phone-${staff.id}`} name="phone" type="tel" defaultValue={staff.phone ?? ''} />
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" type="submit" variant="outline">Save Profile</Button>
+          </div>
+        </form>
+
+        {staff.role !== 'inactive' ? (
+          <div className="space-y-3 border-t pt-4">
+            <p className="text-sm font-semibold">Role &amp; status</p>
+            <form action={updateStaffRoleAction} className="flex flex-col sm:flex-row gap-2">
+              <input type="hidden" name="userId" value={staff.id} />
+              <select
+                name="role"
+                defaultValue={staff.role}
+                className="flex h-10 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="employee">Employee</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
+              </select>
+              <ConfirmSubmitButton
+                size="sm"
+                type="submit"
+                variant="outline"
+                confirmMessage={`Update ${staff.name}'s role?`}
+              >
+                Save Role
+              </ConfirmSubmitButton>
+            </form>
+            <form action={setStaffStatusAction} className="flex justify-end">
+              <input type="hidden" name="userId" value={staff.id} />
+              <input type="hidden" name="mode" value="deactivate" />
+              <ConfirmSubmitButton
+                size="sm"
+                type="submit"
+                variant="destructive"
+                confirmMessage={`Deactivate ${staff.name}'s account? They will lose access until reactivated.`}
+              >
+                Deactivate
+              </ConfirmSubmitButton>
+            </form>
+          </div>
+        ) : (
+          <form action={setStaffStatusAction} className="space-y-3 border-t pt-4">
+            <input type="hidden" name="userId" value={staff.id} />
+            <input type="hidden" name="mode" value="reactivate" />
+            <p className="text-sm font-semibold">Reactivate</p>
+            <div className="space-y-1.5">
+              <label htmlFor={`reactivate-role-${staff.id}`} className="text-sm font-medium">Reactivate as</label>
+              <select
+                id={`reactivate-role-${staff.id}`}
+                name="reactivateRole"
+                defaultValue="employee"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="employee">Employee</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div className="flex justify-end">
+              <Button size="sm" type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">Reactivate</Button>
+            </div>
+          </form>
+        )}
+
+        <form action={resetStaffPasswordAction} className="space-y-3 border-t pt-4">
+          <input type="hidden" name="userId" value={staff.id} />
+          <p className="text-sm font-semibold">Reset password</p>
+          <TempPasswordField id={`reset-password-${staff.id}`} name="password" minLength={8} />
+          <div className="flex justify-end">
+            <ConfirmSubmitButton
+              size="sm"
+              type="submit"
+              variant="outline"
+              confirmMessage={`Reset ${staff.name}'s password? They will need the new temporary password to sign in.`}
+            >
+              Reset
+            </ConfirmSubmitButton>
+          </div>
+        </form>
+
+        <div className="border-t pt-4">
+          {staff.role === 'inactive' && staff.id !== currentUserId ? (
+            <form action={deleteStaffAction} className="flex justify-end">
+              <input type="hidden" name="userId" value={staff.id} />
+              <ConfirmSubmitButton
+                size="sm"
+                type="submit"
+                variant="destructive"
+                confirmMessage={`Delete ${staff.name} permanently? This cannot be undone.`}
+              >
+                Delete Permanently
+              </ConfirmSubmitButton>
+            </form>
+          ) : staff.role === 'inactive' ? (
+            <p className="text-xs text-muted-foreground text-right">Sign out first before deleting this account.</p>
+          ) : (
+            <p className="text-xs text-muted-foreground text-right">Deactivate this account before permanent delete.</p>
+          )}
+        </div>
+      </div>
+    </Drawer>
+  )
 }
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
@@ -1207,6 +1495,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     if (isOpen) existing.open += 1
   }
 
+  const activeTab = resolveAdminTab(getQueryValue(searchParams?.tab))
+  const adminTabs = [
+    { id: 'overview' as const, label: 'Overview' },
+    { id: 'shifts' as const, label: 'Shifts' },
+    { id: 'requests' as const, label: 'Requests', badge: pendingRequestsCount },
+    { id: 'staff' as const, label: 'Staff' },
+  ]
+  const tabQuery = `?tab=${activeTab}`
+  const openShiftCreate = getQueryValue(searchParams?.create) === 'shift'
+  const openBulkCreate = getQueryValue(searchParams?.create) === 'bulk'
+  const openStaffCreate = getQueryValue(searchParams?.create) === 'staff'
+  const openStaffEditId = getQueryValue(searchParams?.openStaffId) ?? ''
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b">
@@ -1218,7 +1519,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <div>
               <h1 className="text-2xl font-bold">Scheduler Admin</h1>
               <p className="text-sm text-muted-foreground">
-                Running operations for {session.user.name}
+                Running operations for {session.user.name}. Review requests first, then adjust staffing and publish shifts.
               </p>
             </div>
           </div>
@@ -1231,634 +1532,446 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Link href="#requests" className="block">
-            <Card className="transition-colors hover:border-blue-300">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl sm:text-3xl font-bold">{pendingRequestsCount}</div>
-                <p className="text-sm text-muted-foreground">Time off and swap approvals</p>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="#upcoming-shifts" className="block">
-            <Card className="transition-colors hover:border-blue-300">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Unfilled Shifts</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl sm:text-3xl font-bold">{unfilledUpcomingShifts.length}</div>
-                <p className="text-sm text-muted-foreground">In the next {upcomingShiftRows.length} shifts</p>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="#staff-management" className="block">
-            <Card className="transition-colors hover:border-blue-300">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Team Members</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl sm:text-3xl font-bold">{activeStaff.length}</div>
-                <p className="text-sm text-muted-foreground">All schedulable users</p>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="#create-shift" className="block">
-            <Card className="transition-colors hover:border-blue-300">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Scheduled Hours</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl sm:text-3xl font-bold">{formatHours(weekHours)}</div>
-                <p className="text-sm text-muted-foreground">Current week (assigned only)</p>
-              </CardContent>
-            </Card>
-          </Link>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-xs font-medium text-muted-foreground">Pending Requests</p>
+              <p className="mt-1 text-2xl font-bold">{pendingRequestsCount}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Time off and swaps</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-xs font-medium text-muted-foreground">Unfilled Shifts</p>
+              <p className="mt-1 text-2xl font-bold">{unfilledUpcomingShifts.length}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Next {upcomingShiftRows.length} shifts</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-xs font-medium text-muted-foreground">Team Members</p>
+              <p className="mt-1 text-2xl font-bold">{activeStaff.length}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Schedulable users</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-xs font-medium text-muted-foreground">Hours This Week</p>
+              <p className="mt-1 text-2xl font-bold">{formatHours(weekHours)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Assigned only</p>
+            </CardContent>
+          </Card>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-            <Button asChild className="justify-start bg-[#1e3a8a] hover:bg-[#172b6d]">
-              <Link href="#create-shift">
-              <CalendarPlus className="mr-2 h-4 w-4" />
-              Create Shift
-              </Link>
-            </Button>
-            <Button asChild className="justify-start" variant="outline">
-              <Link href="#bulk-schedule">
-                <CalendarDays className="mr-2 h-4 w-4" />
-                Bulk Schedule
-              </Link>
-            </Button>
-            <Button asChild className="justify-start" variant="outline">
-              <Link href="#staff-management">
-                <UserPlus className="mr-2 h-4 w-4" />
-                Add Staff
-              </Link>
-            </Button>
-            <Button asChild className="justify-start" variant="outline">
-              <Link href="#requests">
-                <CheckSquare className="mr-2 h-4 w-4" />
-                Review Requests
-              </Link>
-            </Button>
-            <form action={publishScheduleAction}>
-              <Button type="submit" className="justify-start w-full" variant="outline">
-                <CalendarDays className="mr-2 h-4 w-4" />
-                Publish Schedule
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        <AdminTabs active={activeTab} tabs={adminTabs} />
 
-        <Card id="create-shift">
-          <CardHeader>
-            <CardTitle className="text-lg">Create Shift</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {formStatus === 'shift-created' ? (
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                Shift created successfully.
-              </div>
-            ) : null}
-            {formStatus === 'schedule-published' ? (
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                Draft shifts were published.
-              </div>
-            ) : null}
-            {formStatus === 'schedule-no-drafts' ? (
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                No future draft shifts were available to publish.
-              </div>
-            ) : null}
-            {formError === 'missing-fields' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                Date, start time, and end time are required.
-              </div>
-            ) : null}
-            {formError === 'invalid-time' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                End time must be after start time.
-              </div>
-            ) : null}
-            {formError === 'after-hours' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                Store closes at 8:00 PM. Shifts must end by 8:00 PM.
-              </div>
-            ) : null}
-            <p className="text-sm text-muted-foreground">
-              Shift type and location are fixed to <span className="font-medium">{DEFAULT_SHIFT_TITLE}</span> at <span className="font-medium">{DEFAULT_SHIFT_LOCATION}</span>.
-            </p>
-            <form action={createShiftAction} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label htmlFor="assignedUserId" className="text-sm font-medium">Assign To (Optional)</label>
-                <select
-                  id="assignedUserId"
-                  name="assignedUserId"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  defaultValue=""
-                >
-                  <option value="">Unassigned</option>
-                  {schedulableStaffRows.map((staff) => (
-                    <option key={staff.id} value={staff.id}>
-                      {staff.name} ({staff.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="shiftDate" className="text-sm font-medium">Date</label>
-                <DatePickerField id="shiftDate" name="shiftDate" required />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="startTime" className="text-sm font-medium">Start Time</label>
-                <TimePickerField id="startTime" name="startTime" max="19:59" required />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="endTime" className="text-sm font-medium">End Time</label>
-                <TimePickerField id="endTime" name="endTime" max="20:00" required />
-              </div>
-              <div className="space-y-2 xl:col-span-2">
-                <label htmlFor="notes" className="text-sm font-medium">Notes (Optional)</label>
-                <textarea
-                  id="notes"
-                  name="notes"
-                  rows={3}
-                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Shift notes, special tasks, opening/closing checklist..."
-                />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="status" className="text-sm font-medium">Status</label>
-                <select
-                  id="status"
-                  name="status"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  defaultValue="published"
-                >
-                  <option value="published">Published</option>
-                  <option value="draft">Draft</option>
-                </select>
-              </div>
-              <div className="md:col-span-2 xl:col-span-3 flex justify-end">
-                <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">
-                  Save Shift
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+        <AdminToast
+          status={formStatus}
+          error={formError}
+          count={createdBulkCount}
+          dismissHref={`/admin${tabQuery}`}
+        />
 
-        <Card id="bulk-schedule">
-          <CardHeader>
-            <CardTitle className="text-lg">Bulk Schedule Creator</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {formStatus === 'bulk-shifts-created' ? (
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                Created {createdBulkCount} shifts.
-              </div>
-            ) : null}
-            {formError === 'bulk-missing-fields' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                Start date, start time, and end time are required.
-              </div>
-            ) : null}
-            {formError === 'bulk-no-days-selected' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                Select at least one weekday to schedule.
-              </div>
-            ) : null}
-            {formError === 'bulk-invalid-range' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                Date range is invalid. For custom ranges, set an end date on or after the start date.
-              </div>
-            ) : null}
-            {formError === 'bulk-range-too-large' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                Bulk range is too large. Keep it to 93 days or fewer.
-              </div>
-            ) : null}
-            {formError === 'bulk-invalid-time' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                End time must be after start time.
-              </div>
-            ) : null}
-            {formError === 'bulk-after-hours' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                Store closes at 8:00 PM. Shifts must end by 8:00 PM.
-              </div>
-            ) : null}
-            {formError === 'bulk-invalid-assignee' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                The selected staff member does not exist or is inactive.
-              </div>
-            ) : null}
-            {formError === 'bulk-no-matching-days' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                No shifts matched the selected weekdays inside that range.
-              </div>
-            ) : null}
-            <p className="text-sm text-muted-foreground">
-              Shift type and location are fixed to <span className="font-medium">{DEFAULT_SHIFT_TITLE}</span> at <span className="font-medium">{DEFAULT_SHIFT_LOCATION}</span>.
-            </p>
-
-            <form action={createBulkScheduleAction} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label htmlFor="bulk-assignedUserId" className="text-sm font-medium">Assign To (Optional)</label>
-                <select
-                  id="bulk-assignedUserId"
-                  name="assignedUserId"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  defaultValue=""
-                >
-                  <option value="">Unassigned</option>
-                  {schedulableStaffRows.map((staff) => (
-                    <option key={staff.id} value={staff.id}>
-                      {staff.name} ({staff.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="bulk-startDate" className="text-sm font-medium">Start Date</label>
-                <DatePickerField id="bulk-startDate" name="startDate" required />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="bulk-rangePreset" className="text-sm font-medium">Range</label>
-                <select
-                  id="bulk-rangePreset"
-                  name="rangePreset"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  defaultValue="week"
-                >
-                  <option value="week">1 week</option>
-                  <option value="month">1 month</option>
-                  <option value="custom">Custom end date</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="bulk-endDate" className="text-sm font-medium">Custom End Date</label>
-                <DatePickerField id="bulk-endDate" name="endDate" />
-                <p className="text-xs text-muted-foreground">Only used when Range is set to Custom end date.</p>
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="bulk-startTime" className="text-sm font-medium">Start Time</label>
-                <TimePickerField id="bulk-startTime" name="startTime" max="19:59" required />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="bulk-endTime" className="text-sm font-medium">End Time</label>
-                <TimePickerField id="bulk-endTime" name="endTime" max="20:00" required />
-              </div>
-              <div className="space-y-2 xl:col-span-3">
-                <label className="text-sm font-medium">Repeat On</label>
-                <div className="flex flex-wrap gap-2">
-                  {WEEKDAY_OPTIONS.map((day) => (
-                    <label key={day.value} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm bg-card">
-                      <input type="checkbox" name="daysOfWeek" value={day.value} className="h-4 w-4" />
-                      <span>{day.label}</span>
-                    </label>
-                  ))}
+        {activeTab === 'overview' ? (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Start here</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-sm font-semibold">1. Clear approvals</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Time-off and swap requests before changing staffing.</p>
                 </div>
-              </div>
-              <div className="space-y-2 xl:col-span-2">
-                <label htmlFor="bulk-notes" className="text-sm font-medium">Notes (Optional)</label>
-                <textarea
-                  id="bulk-notes"
-                  name="notes"
-                  rows={3}
-                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Optional notes for all generated shifts..."
-                />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="bulk-status" className="text-sm font-medium">Status</label>
-                <select
-                  id="bulk-status"
-                  name="status"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  defaultValue="published"
-                >
-                  <option value="published">Published</option>
-                  <option value="draft">Draft</option>
-                </select>
-              </div>
-              <div className="md:col-span-2 xl:col-span-3 flex justify-end">
-                <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">
-                  Create Bulk Schedule
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-sm font-semibold">2. Fill open coverage</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Use shifts and bulk scheduling to close gaps.</p>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-sm font-semibold">3. Publish with confidence</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Publish once coverage looks right so staff gets one clear update.</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Quick actions</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <Button asChild className="justify-start bg-[#1e3a8a] hover:bg-[#172b6d]">
+                  <Link href="/admin?tab=shifts&create=shift">
+                    <CalendarPlus className="mr-2 h-4 w-4" />
+                    New Shift
+                  </Link>
                 </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+                <Button asChild className="justify-start" variant="outline">
+                  <Link href="/admin?tab=shifts&create=bulk">
+                    <CalendarDays className="mr-2 h-4 w-4" />
+                    Bulk Schedule
+                  </Link>
+                </Button>
+                <Button asChild className="justify-start" variant="outline">
+                  <Link href="/admin?tab=staff&create=staff">
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Add Staff
+                  </Link>
+                </Button>
+                <Button asChild className="justify-start" variant="outline">
+                  <Link href="/admin?tab=requests">
+                    <CheckSquare className="mr-2 h-4 w-4" />
+                    Review Requests
+                  </Link>
+                </Button>
+                <form action={publishScheduleAction} className="sm:col-span-2 lg:col-span-4">
+                  <ConfirmSubmitButton
+                    type="submit"
+                    className="justify-start w-full"
+                    variant="outline"
+                    confirmMessage="Publish all future draft shifts now? Assigned employees will be notified immediately."
+                  >
+                    <CalendarDays className="mr-2 h-4 w-4" />
+                    Publish All Drafts
+                  </ConfirmSubmitButton>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
 
-        <div id="upcoming-shifts" className="space-y-4">
-          {formStatus === 'shift-updated' ? (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              Shift updated.
+        {activeTab === 'shifts' ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Upcoming shifts</h2>
+              <p className="text-sm text-muted-foreground">Tap a row to edit or reassign. Shifts default to {DEFAULT_SHIFT_TITLE} at {DEFAULT_SHIFT_LOCATION}.</p>
             </div>
-          ) : null}
-          {formStatus === 'shift-cancelled' ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Shift cancelled.
-            </div>
-          ) : null}
-          {formStatus === 'shift-restored' ? (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              Shift restored to published.
-            </div>
-          ) : null}
-          {formError === 'edit-missing-fields' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Shift date, start time, and end time are required.
-            </div>
-          ) : null}
-          {formError === 'edit-invalid-time' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Shift end time must be after start time.
-            </div>
-          ) : null}
-          {formError === 'edit-after-hours' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Store closes at 8:00 PM. Shifts must end by 8:00 PM.
-            </div>
-          ) : null}
-          {formError === 'invalid-shift' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Shift not found or no longer editable.
-            </div>
-          ) : null}
-          {formError === 'invalid-assignee' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              The selected assignee does not exist.
-            </div>
-          ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Drawer
+                title="New shift"
+                description={`Default: ${DEFAULT_SHIFT_TITLE} at ${DEFAULT_SHIFT_LOCATION}.`}
+                initialOpen={openShiftCreate}
+                trigger={
+                  <Button className="bg-[#1e3a8a] hover:bg-[#172b6d]">
+                    <Plus className="mr-1 h-4 w-4" />
+                    New Shift
+                  </Button>
+                }
+              >
+                <form action={createShiftAction} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="assignedUserId" className="text-sm font-medium">Assign to</label>
+                    <select
+                      id="assignedUserId"
+                      name="assignedUserId"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      defaultValue=""
+                    >
+                      <option value="">Unassigned</option>
+                      {schedulableStaffRows.map((staff) => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.name} ({staff.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="shiftDate" className="text-sm font-medium">Date</label>
+                    <DatePickerField id="shiftDate" name="shiftDate" required />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label htmlFor="startTime" className="text-sm font-medium">Start</label>
+                      <TimePickerField id="startTime" name="startTime" max="19:59" required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="endTime" className="text-sm font-medium">End</label>
+                      <TimePickerField id="endTime" name="endTime" max="20:00" required />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="notes" className="text-sm font-medium">Notes <span className="text-muted-foreground font-normal">(optional)</span></label>
+                    <textarea
+                      id="notes"
+                      name="notes"
+                      rows={3}
+                      className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      placeholder="Special tasks, opening/closing checklist..."
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="status" className="text-sm font-medium">Status</label>
+                    <select
+                      id="status"
+                      name="status"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      defaultValue="published"
+                    >
+                      <option value="published">Published</option>
+                      <option value="draft">Draft</option>
+                    </select>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Store closes at 8:00 PM. Shifts must end by 8:00 PM.</p>
+                  <div className="flex justify-end pt-2">
+                    <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">Save Shift</Button>
+                  </div>
+                </form>
+              </Drawer>
 
+              <Drawer
+                title="Bulk schedule"
+                description="Generate repeating shifts across a date range."
+                initialOpen={openBulkCreate}
+                trigger={
+                  <Button variant="outline">
+                    <CalendarDays className="mr-1 h-4 w-4" />
+                    Bulk Schedule
+                  </Button>
+                }
+              >
+                <form action={createBulkScheduleAction} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="bulk-assignedUserId" className="text-sm font-medium">Assign to</label>
+                    <select
+                      id="bulk-assignedUserId"
+                      name="assignedUserId"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      defaultValue=""
+                    >
+                      <option value="">Unassigned</option>
+                      {schedulableStaffRows.map((staff) => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.name} ({staff.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="bulk-startDate" className="text-sm font-medium">Start date</label>
+                    <DatePickerField id="bulk-startDate" name="startDate" required />
+                  </div>
+                  <BulkRangeFields />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label htmlFor="bulk-startTime" className="text-sm font-medium">Start</label>
+                      <TimePickerField id="bulk-startTime" name="startTime" max="19:59" required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="bulk-endTime" className="text-sm font-medium">End</label>
+                      <TimePickerField id="bulk-endTime" name="endTime" max="20:00" required />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Repeat on</label>
+                    <div className="flex flex-wrap gap-2">
+                      {WEEKDAY_OPTIONS.map((day) => (
+                        <label key={day.value} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm bg-card">
+                          <input type="checkbox" name="daysOfWeek" value={day.value} className="h-4 w-4" />
+                          <span>{day.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="bulk-notes" className="text-sm font-medium">Notes <span className="text-muted-foreground font-normal">(optional)</span></label>
+                    <textarea
+                      id="bulk-notes"
+                      name="notes"
+                      rows={3}
+                      className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      placeholder="Optional notes for all generated shifts..."
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="bulk-status" className="text-sm font-medium">Status</label>
+                    <select
+                      id="bulk-status"
+                      name="status"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      defaultValue="published"
+                    >
+                      <option value="published">Published</option>
+                      <option value="draft">Draft</option>
+                    </select>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Max range 93 days. Shifts must end by 8:00 PM.</p>
+                  <div className="flex justify-end pt-2">
+                    <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">Create Schedule</Button>
+                  </div>
+                </form>
+              </Drawer>
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === 'shifts' ? (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <Card className="xl:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-lg">Upcoming Shifts</CardTitle>
-              </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 {upcomingShiftRows.length === 0 ? (
-                  <div className="h-40 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-500">
+                  <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
                     No upcoming shifts yet.
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {upcomingShiftRows.map((shift) => {
-                      const assignedCount = assignedCountByShift.get(shift.id) ?? 0
-                      const isOpen = assignedCount === 0 && shift.status !== 'cancelled'
-                      const assignedUserId = assignedUserIdByShift.get(shift.id) ?? ''
-                      const assignedUserName = assignedUserId ? userNameMap.get(assignedUserId) : undefined
-                      return (
-                        <div key={shift.id} id={`shift-${shift.id}`} className="border rounded-lg p-4 bg-card">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <p className="font-semibold">{shift.title}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {dateLabel.format(shift.startTime)} • {timeLabel.format(shift.startTime)} - {timeLabel.format(shift.endTime)}
-                                {shift.location ? ` • ${shift.location}` : ''}
-                              </p>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {assignedUserName ? `Assigned: ${assignedUserName}` : 'Unassigned'}
-                              </p>
+                  <>
+                    <div className="hidden md:block">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            <th className="px-4 py-2">Date</th>
+                            <th className="px-4 py-2">Time</th>
+                            <th className="px-4 py-2">Assignee</th>
+                            <th className="px-4 py-2">Status</th>
+                            <th className="px-4 py-2"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {upcomingShiftRows.map((shift) => {
+                            const assignedCount = assignedCountByShift.get(shift.id) ?? 0
+                            const isOpen = assignedCount === 0 && shift.status !== 'cancelled'
+                            const assignedUserId = assignedUserIdByShift.get(shift.id) ?? ''
+                            const assignedUserName = assignedUserId ? userNameMap.get(assignedUserId) : undefined
+                            return (
+                              <tr key={shift.id} className="border-b last:border-b-0 align-middle">
+                                <td className="px-4 py-3 font-medium whitespace-nowrap">{dateLabel.format(shift.startTime)}</td>
+                                <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                                  {timeLabel.format(shift.startTime)} – {timeLabel.format(shift.endTime)}
+                                </td>
+                                <td className="px-4 py-3">
+                                  {assignedUserName ? (
+                                    <span>{assignedUserName}</span>
+                                  ) : (
+                                    <span className="text-muted-foreground">—</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', shiftStatusPill(shift.status))}>
+                                      {shift.status ?? 'unknown'}
+                                    </span>
+                                    {isOpen ? (
+                                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">Open</span>
+                                    ) : null}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <ShiftEditDrawer
+                                    shift={shift}
+                                    assignedUserId={assignedUserId}
+                                    staff={schedulableStaffRows}
+                                    initialOpen={openShiftId === shift.id}
+                                  />
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="md:hidden divide-y">
+                      {upcomingShiftRows.map((shift) => {
+                        const assignedCount = assignedCountByShift.get(shift.id) ?? 0
+                        const isOpen = assignedCount === 0 && shift.status !== 'cancelled'
+                        const assignedUserId = assignedUserIdByShift.get(shift.id) ?? ''
+                        const assignedUserName = assignedUserId ? userNameMap.get(assignedUserId) : undefined
+                        return (
+                          <div key={shift.id} className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="font-medium">{dateLabel.format(shift.startTime)}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {timeLabel.format(shift.startTime)} – {timeLabel.format(shift.endTime)}
+                                </p>
+                                <p className="mt-1 text-sm truncate">
+                                  {assignedUserName ?? <span className="text-muted-foreground">Unassigned</span>}
+                                </p>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', shiftStatusPill(shift.status))}>
+                                  {shift.status ?? 'unknown'}
+                                </span>
+                                {isOpen ? (
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">Open</span>
+                                ) : null}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className={cn('px-2 py-1 rounded-full text-xs font-medium', shiftStatusPill(shift.status))}>
-                                {shift.status ?? 'unknown'}
-                              </span>
-                              <span className={cn(
-                                'px-2 py-1 rounded-full text-xs font-medium',
-                                isOpen ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800',
-                              )}>
-                                {isOpen ? 'Open' : `${assignedCount} assigned`}
-                              </span>
+                            <div className="mt-3 flex justify-end">
+                              <ShiftEditDrawer
+                                shift={shift}
+                                assignedUserId={assignedUserId}
+                                staff={schedulableStaffRows}
+                                initialOpen={openShiftId === shift.id}
+                              />
                             </div>
                           </div>
-
-                          <details className="mt-4 rounded-md border border-slate-200 p-3" open={openShiftId === shift.id}>
-                            <summary className="cursor-pointer text-sm font-medium">Edit / Reassign</summary>
-                            <form action={updateShiftAction} className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                              <input type="hidden" name="shiftId" value={shift.id} />
-                              <div className="space-y-1">
-                                <label htmlFor={`shift-assignee-${shift.id}`} className="text-xs font-medium">Assign To</label>
-                                <select
-                                  id={`shift-assignee-${shift.id}`}
-                                  name="assignedUserId"
-                                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                  defaultValue={assignedUserId}
-                                >
-                                  <option value="">Unassigned</option>
-                                  {schedulableStaffRows.map((staff) => (
-                                    <option key={staff.id} value={staff.id}>
-                                      {staff.name} ({staff.role})
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div className="space-y-1">
-                                <label htmlFor={`shift-date-${shift.id}`} className="text-xs font-medium">Date</label>
-                                <DatePickerField
-                                  id={`shift-date-${shift.id}`}
-                                  name="shiftDate"
-                                  defaultValue={formatDateInput(shift.startTime)}
-                                  required
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label htmlFor={`shift-start-${shift.id}`} className="text-xs font-medium">Start</label>
-                                <TimePickerField
-                                  id={`shift-start-${shift.id}`}
-                                  name="startTime"
-                                  max="19:59"
-                                  defaultValue={formatTimeInput(shift.startTime)}
-                                  required
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label htmlFor={`shift-end-${shift.id}`} className="text-xs font-medium">End</label>
-                                <TimePickerField
-                                  id={`shift-end-${shift.id}`}
-                                  name="endTime"
-                                  max="20:00"
-                                  defaultValue={formatTimeInput(shift.endTime)}
-                                  required
-                                />
-                              </div>
-                              <div className="space-y-1 xl:col-span-2">
-                                <label htmlFor={`shift-notes-${shift.id}`} className="text-xs font-medium">Notes</label>
-                                <textarea
-                                  id={`shift-notes-${shift.id}`}
-                                  name="notes"
-                                  rows={2}
-                                  defaultValue={shift.notes ?? ''}
-                                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label htmlFor={`shift-status-${shift.id}`} className="text-xs font-medium">Status</label>
-                                <select
-                                  id={`shift-status-${shift.id}`}
-                                  name="status"
-                                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                  defaultValue={shift.status === 'draft' || shift.status === 'cancelled' ? shift.status : 'published'}
-                                >
-                                  <option value="published">Published</option>
-                                  <option value="draft">Draft</option>
-                                  <option value="cancelled">Cancelled</option>
-                                </select>
-                              </div>
-                              <div className="md:col-span-2 xl:col-span-3 flex flex-wrap justify-end gap-2">
-                                <Button type="submit" size="sm" className="bg-[#1e3a8a] hover:bg-[#172b6d]">
-                                  Save Changes
-                                </Button>
-                              </div>
-                            </form>
-
-                            <div className="mt-3 border-t pt-3 flex justify-end">
-                              <form action={setShiftCancelledAction}>
-                                <input type="hidden" name="shiftId" value={shift.id} />
-                                <input type="hidden" name="mode" value={shift.status === 'cancelled' ? 'restore' : 'cancel'} />
-                                <Button
-                                  type="submit"
-                                  size="sm"
-                                  variant={shift.status === 'cancelled' ? 'outline' : 'destructive'}
-                                >
-                                  {shift.status === 'cancelled' ? 'Restore Shift' : 'Cancel Shift'}
-                                </Button>
-                              </form>
-                            </div>
-                          </details>
-                        </div>
-                      )
-                    })}
-                  </div>
+                        )
+                      })}
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Coverage Snapshot</CardTitle>
+                <CardTitle className="text-base">Coverage by day</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-2">
                 {[...coverageByDay.values()].length === 0 ? (
                   <p className="text-sm text-muted-foreground">No active shifts in this range.</p>
                 ) : (
                   [...coverageByDay.values()].map((day) => (
-                    <div key={day.label} className="rounded-lg border p-3 bg-card">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium">{day.label}</span>
-                        <span className={cn('text-xs font-medium px-2 py-1 rounded-full', day.open > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800')}>
-                          {day.open > 0 ? `${day.open} open` : 'Fully staffed'}
-                        </span>
+                    <div key={day.label} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                      <div>
+                        <p className="font-medium">{day.label}</p>
+                        <p className="text-xs text-muted-foreground">{day.total} shifts</p>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">{day.total} shifts scheduled</p>
+                      <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', day.open > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800')}>
+                        {day.open > 0 ? `${day.open} open` : 'Fully staffed'}
+                      </span>
                     </div>
                   ))
                 )}
               </CardContent>
             </Card>
           </div>
-        </div>
+        ) : null}
 
-        <div id="requests" className="space-y-4">
-          {formStatus === 'timeoff-approved' ? (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              Time-off request approved.
-            </div>
-          ) : null}
-          {formStatus === 'timeoff-denied' ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Time-off request denied.
-            </div>
-          ) : null}
-          {formStatus === 'swap-approved' ? (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              Shift swap approved and assignment updated.
-            </div>
-          ) : null}
-          {formStatus === 'swap-denied' ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Shift swap denied.
-            </div>
-          ) : null}
-          {formError === 'invalid-review' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Invalid review action submitted.
-            </div>
-          ) : null}
-          {formError === 'request-not-found' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              That time-off request is no longer pending.
-            </div>
-          ) : null}
-          {formError === 'swap-not-found' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              That swap request is no longer pending.
-            </div>
-          ) : null}
-          {formError === 'assignment-not-found' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              The original assignment for this swap no longer exists.
-            </div>
-          ) : null}
-          {formError === 'swap-conflict' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Requested staff is already assigned to that shift.
-            </div>
-          ) : null}
-          {formError === 'swap-target-inactive' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Requested staff is inactive and cannot receive this shift.
-            </div>
-          ) : null}
-
+        {activeTab === 'requests' ? (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Pending Time-Off Requests</CardTitle>
+                <CardTitle className="text-base">Time-off requests</CardTitle>
               </CardHeader>
               <CardContent>
                 {pendingTimeOffRows.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No pending time-off requests.</p>
+                  <p className="text-sm text-muted-foreground">Nothing pending.</p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="divide-y -mx-6">
                     {pendingTimeOffRows.map((request) => (
-                      <div key={request.id} className="rounded-lg border p-3 bg-card">
+                      <div key={request.id} className="px-6 py-4">
                         <div className="flex items-start justify-between gap-3">
-                          <div>
+                          <div className="min-w-0">
                             <p className="font-medium">{request.userName ?? 'Unknown user'}</p>
                             <p className="text-sm text-muted-foreground">
-                              {dateLabel.format(request.startDate)} - {dateLabel.format(request.endDate)}
+                              {dateLabel.format(request.startDate)} – {dateLabel.format(request.endDate)}
                             </p>
                             {request.reason ? <p className="text-sm mt-1">{request.reason}</p> : null}
                           </div>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground shrink-0">
                             {request.createdAt ? dateTimeLabel.format(request.createdAt) : 'recent'}
                           </span>
                         </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
+                        <div className="mt-3 flex gap-2">
                           <form action={reviewTimeOffAction}>
                             <input type="hidden" name="requestId" value={request.id} />
                             <input type="hidden" name="decision" value="approve" />
-                            <Button size="sm" type="submit" className="bg-emerald-600 hover:bg-emerald-700">
-                              Approve
-                            </Button>
+                            <Button size="sm" type="submit" className="bg-emerald-600 hover:bg-emerald-700">Approve</Button>
                           </form>
                           <form action={reviewTimeOffAction}>
                             <input type="hidden" name="requestId" value={request.id} />
                             <input type="hidden" name="decision" value="deny" />
-                            <Button size="sm" type="submit" variant="outline">
-                              Deny
-                            </Button>
+                            <Button size="sm" type="submit" variant="outline">Deny</Button>
                           </form>
                         </div>
                       </div>
@@ -1870,13 +1983,13 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Pending Shift Swaps</CardTitle>
+                <CardTitle className="text-base">Shift swaps</CardTitle>
               </CardHeader>
               <CardContent>
                 {pendingSwapRows.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No pending swap requests.</p>
+                  <p className="text-sm text-muted-foreground">Nothing pending.</p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="divide-y -mx-6">
                     {pendingSwapRows.map((swap) => {
                       const assignment = swapAssignmentMap.get(swap.assignmentId)
                       const shift = assignment ? shiftMap.get(assignment.shiftId) : undefined
@@ -1884,31 +1997,28 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       const toUserName = userNameMap.get(swap.requestedUserId)
 
                       return (
-                        <div key={swap.id} className="rounded-lg border p-3 bg-card">
-                          <p className="font-medium">{shift?.title ?? 'Unknown shift'}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {shift?.startTime ? `${dateLabel.format(shift.startTime)} • ${timeLabel.format(shift.startTime)} - ${timeLabel.format(shift.endTime)}` : 'Shift details unavailable'}
+                        <div key={swap.id} className="px-6 py-4">
+                          <p className="font-medium">
+                            {shift?.startTime ? `${dateLabel.format(shift.startTime)} • ${timeLabel.format(shift.startTime)} – ${timeLabel.format(shift.endTime)}` : 'Shift details unavailable'}
                           </p>
                           <p className="text-sm mt-1">
-                            {fromUserName ?? 'Unassigned'} to {toUserName ?? 'Unknown employee'}
+                            <span className="text-muted-foreground">{fromUserName ?? 'Unassigned'}</span>
+                            <span className="mx-2">→</span>
+                            <span>{toUserName ?? 'Unknown employee'}</span>
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             Requested {swap.createdAt ? dateTimeLabel.format(swap.createdAt) : 'recently'}
                           </p>
-                          <div className="mt-3 flex flex-wrap gap-2">
+                          <div className="mt-3 flex gap-2">
                             <form action={reviewSwapAction}>
                               <input type="hidden" name="swapId" value={swap.id} />
                               <input type="hidden" name="decision" value="approve" />
-                              <Button size="sm" type="submit" className="bg-emerald-600 hover:bg-emerald-700">
-                                Approve
-                              </Button>
+                              <Button size="sm" type="submit" className="bg-emerald-600 hover:bg-emerald-700">Approve</Button>
                             </form>
                             <form action={reviewSwapAction}>
                               <input type="hidden" name="swapId" value={swap.id} />
                               <input type="hidden" name="decision" value="deny" />
-                              <Button size="sm" type="submit" variant="outline">
-                                Deny
-                              </Button>
+                              <Button size="sm" type="submit" variant="outline">Deny</Button>
                             </form>
                           </div>
                         </div>
@@ -1919,274 +2029,104 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </CardContent>
             </Card>
           </div>
-        </div>
+        ) : null}
 
-        <div id="staff-management" className="space-y-4">
-          {formStatus === 'staff-created' ? (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              Staff account created.
-            </div>
-          ) : null}
-          {formStatus === 'staff-profile-updated' ? (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              Staff profile updated.
-            </div>
-          ) : null}
-          {formStatus === 'staff-role-updated' ? (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              Staff role updated.
-            </div>
-          ) : null}
-          {formStatus === 'staff-deactivated' ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Staff account deactivated.
-            </div>
-          ) : null}
-          {formStatus === 'staff-reactivated' ? (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              Staff account reactivated.
-            </div>
-          ) : null}
-          {formStatus === 'staff-password-reset' ? (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              Staff password reset.
-            </div>
-          ) : null}
-          {formStatus === 'staff-deleted' ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Staff account permanently deleted.
-            </div>
-          ) : null}
-          {formError === 'staff-missing-fields' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Name, email, and password are required to create staff.
-            </div>
-          ) : null}
-          {formError === 'staff-profile-missing-fields' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Name and email are required to update a staff profile.
-            </div>
-          ) : null}
-          {formError === 'staff-invalid-email' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Staff email must be a valid email address.
-            </div>
-          ) : null}
-          {formError === 'staff-password-too-short' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Staff password must be at least 8 characters.
-            </div>
-          ) : null}
-          {formError === 'staff-reset-password-too-short' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Reset password must be at least 8 characters.
-            </div>
-          ) : null}
-          {formError === 'staff-email-exists' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              A staff account with that email already exists.
-            </div>
-          ) : null}
-          {formError === 'staff-invalid-role' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Invalid staff role provided.
-            </div>
-          ) : null}
-          {formError === 'staff-not-found' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Staff account not found.
-            </div>
-          ) : null}
-          {formError === 'staff-last-admin' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              You must keep at least one active admin account.
-            </div>
-          ) : null}
-          {formError === 'staff-cannot-delete-self' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              You cannot delete your own account while you are signed in.
-            </div>
-          ) : null}
-          {formError === 'staff-delete-requires-inactive' ? (
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-              Deactivate this account first before deleting it permanently.
-            </div>
-          ) : null}
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Add Staff</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form action={createStaffAction} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <label htmlFor="staff-name" className="text-sm font-medium">Name</label>
-                  <Input id="staff-name" name="name" placeholder="Jane Doe" required />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor="staff-email" className="text-sm font-medium">Email</label>
-                  <Input id="staff-email" name="email" type="email" placeholder="jane@laundryco.com" required />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor="staff-password" className="text-sm font-medium">Temporary Password</label>
-                  <TempPasswordField id="staff-password" name="password" minLength={8} />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor="staff-phone" className="text-sm font-medium">Phone (Optional)</label>
-                  <Input id="staff-phone" name="phone" type="tel" placeholder="+1..." />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor="staff-role" className="text-sm font-medium">Role</label>
-                  <select
-                    id="staff-role"
-                    name="role"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    defaultValue="employee"
-                  >
-                    <option value="employee">Employee</option>
-                    <option value="manager">Manager</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-                <div className="md:col-span-2 xl:col-span-3 flex justify-end">
-                  <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">
-                    Create Staff Account
+        {activeTab === 'staff' ? (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Staff directory</h2>
+                <p className="text-sm text-muted-foreground">Tap a row to update profile, role, or password.</p>
+              </div>
+              <Drawer
+                title="Add staff"
+                description="Create a new account with a temporary password."
+                initialOpen={openStaffCreate}
+                trigger={
+                  <Button className="bg-[#1e3a8a] hover:bg-[#172b6d]">
+                    <Plus className="mr-1 h-4 w-4" />
+                    Add Staff
                   </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+                }
+              >
+                <form action={createStaffAction} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="staff-name" className="text-sm font-medium">Name</label>
+                    <Input id="staff-name" name="name" placeholder="Jane Doe" required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="staff-email" className="text-sm font-medium">Email</label>
+                    <Input id="staff-email" name="email" type="email" placeholder="jane@laundryco.com" required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="staff-password" className="text-sm font-medium">Temporary password</label>
+                    <TempPasswordField id="staff-password" name="password" minLength={8} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="staff-phone" className="text-sm font-medium">Phone <span className="text-muted-foreground font-normal">(optional)</span></label>
+                    <Input id="staff-phone" name="phone" type="tel" placeholder="+1..." />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="staff-role" className="text-sm font-medium">Role</label>
+                    <select
+                      id="staff-role"
+                      name="role"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      defaultValue="employee"
+                    >
+                      <option value="employee">Employee</option>
+                      <option value="manager">Manager</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-end pt-2">
+                    <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">Create Account</Button>
+                  </div>
+                </form>
+              </Drawer>
+            </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Staff Directory</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {staffRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No staff records found.</p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {staffRows.map((staff) => (
-                    <div key={staff.id} className="rounded-lg border p-4 bg-card space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold">{staff.name}</p>
-                          <p className="text-sm text-muted-foreground">{staff.email}</p>
+            <Card>
+              <CardContent className="p-0">
+                {staffRows.length === 0 ? (
+                  <p className="p-6 text-sm text-muted-foreground">No staff records found.</p>
+                ) : (
+                  <ul className="divide-y">
+                    {staffRows.map((staff) => (
+                      <li key={staff.id} className="flex items-center gap-3 px-4 py-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium">
+                          {staff.name.slice(0, 1).toUpperCase()}
                         </div>
-                        <span className={cn('px-2 py-1 rounded-full text-xs font-medium', rolePill(staff.role))}>
-                          {staff.role}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Users className="h-4 w-4" />
-                        <span>{staff.phone ?? 'No phone on file'}</span>
-                      </div>
-
-                      <form action={updateStaffProfileAction} className="space-y-2 border-t pt-3">
-                        <input type="hidden" name="userId" value={staff.id} />
-                        <div className="space-y-1">
-                          <label htmlFor={`staff-name-${staff.id}`} className="text-xs font-medium">Name</label>
-                          <Input id={`staff-name-${staff.id}`} name="name" defaultValue={staff.name} required className="h-9" />
-                        </div>
-                        <div className="space-y-1">
-                          <label htmlFor={`staff-email-${staff.id}`} className="text-xs font-medium">Email</label>
-                          <Input id={`staff-email-${staff.id}`} name="email" type="email" defaultValue={staff.email} required className="h-9" />
-                        </div>
-                        <div className="space-y-1">
-                          <label htmlFor={`staff-phone-${staff.id}`} className="text-xs font-medium">Phone</label>
-                          <Input id={`staff-phone-${staff.id}`} name="phone" type="tel" defaultValue={staff.phone ?? ''} className="h-9" />
-                        </div>
-                        <div className="flex justify-end">
-                          <Button size="sm" type="submit" variant="outline">
-                            Save Profile
-                          </Button>
-                        </div>
-                      </form>
-
-                      {staff.role !== 'inactive' ? (
-                        <div className="space-y-2">
-                          <form action={updateStaffRoleAction} className="flex flex-col sm:flex-row gap-2">
-                            <input type="hidden" name="userId" value={staff.id} />
-                            <select
-                              name="role"
-                              defaultValue={staff.role}
-                              className="flex h-9 flex-1 rounded-md border border-input bg-background px-3 py-1 text-sm"
-                            >
-                              <option value="employee">Employee</option>
-                              <option value="manager">Manager</option>
-                              <option value="admin">Admin</option>
-                            </select>
-                            <Button size="sm" type="submit" variant="outline" className="w-full sm:w-auto">Save Role</Button>
-                          </form>
-                          <form action={setStaffStatusAction} className="flex justify-end">
-                            <input type="hidden" name="userId" value={staff.id} />
-                            <input type="hidden" name="mode" value="deactivate" />
-                            <Button size="sm" type="submit" variant="destructive">
-                              Deactivate
-                            </Button>
-                          </form>
-                        </div>
-                      ) : (
-                        <form action={setStaffStatusAction} className="space-y-2">
-                          <input type="hidden" name="userId" value={staff.id} />
-                          <input type="hidden" name="mode" value="reactivate" />
-                          <div className="space-y-1">
-                            <label htmlFor={`reactivate-role-${staff.id}`} className="text-xs font-medium">Reactivate As</label>
-                            <select
-                              id={`reactivate-role-${staff.id}`}
-                              name="reactivateRole"
-                              defaultValue="employee"
-                              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-                            >
-                              <option value="employee">Employee</option>
-                              <option value="manager">Manager</option>
-                              <option value="admin">Admin</option>
-                            </select>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium truncate">{staff.name}</p>
+                            <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', rolePill(staff.role))}>
+                              {staff.role}
+                            </span>
                           </div>
-                          <div className="flex justify-end">
-                            <Button size="sm" type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">
-                              Reactivate
-                            </Button>
-                          </div>
-                        </form>
-                      )}
-
-                      <form action={resetStaffPasswordAction} className="space-y-2 border-t pt-3">
-                        <input type="hidden" name="userId" value={staff.id} />
-                        <div className="space-y-1">
-                          <label htmlFor={`reset-password-${staff.id}`} className="text-xs font-medium">Reset Password</label>
-                          <div className="space-y-2">
-                            <TempPasswordField id={`reset-password-${staff.id}`} name="password" minLength={8} inputClassName="h-9" />
-                            <div className="flex justify-end">
-                              <Button size="sm" type="submit" variant="outline">
-                                Reset
-                              </Button>
-                            </div>
-                          </div>
+                          <p className="text-sm text-muted-foreground truncate">{staff.email}</p>
+                          {staff.phone ? (
+                            <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                              <Phone className="h-3 w-3" />
+                              {staff.phone}
+                            </p>
+                          ) : null}
                         </div>
-                      </form>
-
-                      <div className="border-t pt-3">
-                        {staff.role === 'inactive' && staff.id !== session.user.id ? (
-                          <form action={deleteStaffAction} className="flex justify-end">
-                            <input type="hidden" name="userId" value={staff.id} />
-                            <Button size="sm" type="submit" variant="destructive">
-                              Delete Permanently
-                            </Button>
-                          </form>
-                        ) : staff.role === 'inactive' ? (
-                          <p className="text-xs text-muted-foreground text-right">Sign out first before deleting this account.</p>
-                        ) : (
-                          <p className="text-xs text-muted-foreground text-right">Deactivate this account before permanent delete.</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                        <div className="shrink-0">
+                          <StaffEditDrawer
+                            staff={staff}
+                            currentUserId={session.user.id}
+                            initialOpen={openStaffEditId === staff.id}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
       </main>
     </div>
   )
