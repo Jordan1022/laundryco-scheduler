@@ -1,0 +1,91 @@
+'use client'
+
+import * as React from 'react'
+import { X } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+type DrawerProps = {
+  trigger: React.ReactNode
+  title: string
+  description?: string
+  children: React.ReactNode
+  initialOpen?: boolean
+}
+
+export function Drawer({ trigger, title, description, children, initialOpen = false }: DrawerProps) {
+  const [open, setOpen] = React.useState(initialOpen)
+  const panelRef = React.useRef<HTMLDivElement | null>(null)
+
+  React.useEffect(() => {
+    if (!open) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [open])
+
+  const triggerWithHandler = React.isValidElement(trigger)
+    ? React.cloneElement(trigger as React.ReactElement<{ onClick?: React.MouseEventHandler }>, {
+        onClick: (event: React.MouseEvent) => {
+          const existing = (trigger as React.ReactElement<{ onClick?: React.MouseEventHandler }>).props.onClick
+          if (existing) existing(event)
+          setOpen(true)
+        },
+      })
+    : (
+        <button type="button" onClick={() => setOpen(true)}>
+          {trigger}
+        </button>
+      )
+
+  return (
+    <>
+      {triggerWithHandler}
+      {open ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          className="fixed inset-0 z-50 flex items-end justify-end sm:items-stretch"
+        >
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div
+            ref={panelRef}
+            className={cn(
+              'relative flex w-full max-h-[92vh] flex-col rounded-t-2xl border-t bg-background shadow-xl',
+              'sm:h-full sm:max-h-none sm:w-[min(560px,100%)] sm:rounded-none sm:border-l sm:border-t-0'
+            )}
+          >
+            <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold truncate">{title}</h2>
+                {description ? (
+                  <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  )
+}
