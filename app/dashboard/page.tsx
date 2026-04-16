@@ -604,26 +604,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
             <div>
               <h1 className="text-2xl font-bold">Laundry Co. Scheduler</h1>
-              <p className="text-sm text-muted-foreground">Welcome back, {name}</p>
+              <p className="text-sm text-muted-foreground">
+                Welcome back, {name}{canManageStaff ? ' • Employee view' : ''}
+              </p>
             </div>
           </div>
           <div className="w-full sm:w-auto flex flex-wrap items-center justify-end gap-2 sm:gap-4">
+            <span className="text-sm font-medium capitalize bg-muted px-3 py-1 rounded-full">
+              {role}
+            </span>
             {canManageStaff ? (
-              <Link
-                href="/admin"
-                className="text-sm font-medium bg-blue-100 text-blue-900 px-3 py-1 rounded-full hover:bg-blue-200 dark:hover:bg-blue-100 transition-colors"
-                title="Open admin panel"
-              >
-                {role}
-              </Link>
-            ) : (
-              <span className="text-sm font-medium bg-muted px-3 py-1 rounded-full">
-                {role}
-              </span>
-            )}
-            {canManageStaff ? (
-              <Button asChild size="sm" variant="outline">
-                <Link href="/admin#staff-management">Admin Panel</Link>
+              <Button asChild size="sm" className="bg-[#1e3a8a] hover:bg-[#172b6d]">
+                <Link href="/admin#requests">Open Admin Workspace</Link>
               </Button>
             ) : null}
             {role !== 'admin' ? (
