@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -19,6 +20,7 @@ export default function LoginPage() {
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setIsLoading(true)
+    setFormError(null)
 
     const formData = new FormData(event.currentTarget)
     const email = formData.get('email') as string
@@ -35,13 +37,16 @@ export default function LoginPage() {
     if (result?.ok) {
       router.push('/dashboard')
       router.refresh()
+      return
     }
+
+    setFormError('We could not sign you in. Check your email and password and try again.')
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <Card className="w-full max-w-md bg-card/95">
-        <CardHeader className="space-y-1">
+    <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(30,58,138,0.16),_transparent_48%),linear-gradient(180deg,_hsl(var(--background)),_hsl(var(--muted)))] p-4">
+      <Card className="w-full max-w-md border-slate-200/80 bg-card/95 shadow-xl shadow-slate-900/5">
+        <CardHeader className="space-y-2">
           <div className="flex items-center justify-center mb-4">
             <div className="h-12 w-12 rounded-full bg-[#1e3a8a] flex items-center justify-center">
               <span className="text-white font-bold text-xl">LC</span>
@@ -58,22 +63,31 @@ export default function LoginPage() {
               Password updated. Please sign in with your new password.
             </div>
           ) : null}
+          {formError ? (
+            <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
+              {formError}
+            </div>
+          ) : null}
           <form onSubmit={onSubmit} className="space-y-4">
-            <div>
+            <div className="space-y-2">
+              <label htmlFor="login-email" className="text-sm font-medium">Email address</label>
               <Input
+                id="login-email"
                 name="email"
                 type="email"
-                placeholder="Email"
+                placeholder="manager@laundryco.com"
                 required
                 disabled={isLoading}
                 className="h-12"
               />
             </div>
-            <div>
+            <div className="space-y-2">
+              <label htmlFor="login-password" className="text-sm font-medium">Password</label>
               <Input
+                id="login-password"
                 name="password"
                 type="password"
-                placeholder="Password"
+                placeholder="Enter your password"
                 required
                 disabled={isLoading}
                 className="h-12"
