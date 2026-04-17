@@ -29,6 +29,9 @@ yarn-error.log*
 
 # local tooling
 .claude/
+.playwright-cli/
+.playwright-mcp/
+laundryco.db
 
 # vercel
 .vercel

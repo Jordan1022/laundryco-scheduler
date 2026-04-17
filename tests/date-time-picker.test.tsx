@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import {
   DatePickerField,
   TimePickerField,
@@ -40,7 +41,7 @@ describe('date-time picker parsing helpers', () => {
   })
 
   it('renders the date field as a native date input', () => {
-    render(
+    const { container } = render(
       <DatePickerField
         id="shift-date"
         name="shiftDate"
@@ -57,10 +58,11 @@ describe('date-time picker parsing helpers', () => {
     expect(input).toHaveAttribute('min', '2026-04-01')
     expect(input).toHaveAttribute('max', '2026-04-30')
     expect(input).toBeRequired()
+    expect(container.querySelectorAll('svg')).toHaveLength(1)
   })
 
   it('renders the time field as a native time input', () => {
-    render(
+    const { container } = render(
       <TimePickerField
         id="shift-start"
         name="startTime"
@@ -79,5 +81,30 @@ describe('date-time picker parsing helpers', () => {
     expect(input).toHaveAttribute('max', '20:00')
     expect(input).toHaveAttribute('step', '900')
     expect(input).toBeRequired()
+    expect(container.querySelectorAll('svg')).toHaveLength(1)
+  })
+
+  it('opens the date picker when clicking anywhere in the input', async () => {
+    const user = userEvent.setup()
+    render(<DatePickerField id="click-date" name="clickDate" />)
+
+    const input = screen.getByLabelText('Date picker') as HTMLInputElement & { showPicker?: () => void }
+    const showPickerSpy = vi.fn()
+    input.showPicker = showPickerSpy
+
+    await user.click(input)
+    expect(showPickerSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens the time picker when clicking anywhere in the input', async () => {
+    const user = userEvent.setup()
+    render(<TimePickerField id="click-time" name="clickTime" />)
+
+    const input = screen.getByLabelText('Time picker') as HTMLInputElement & { showPicker?: () => void }
+    const showPickerSpy = vi.fn()
+    input.showPicker = showPickerSpy
+
+    await user.click(input)
+    expect(showPickerSpy).toHaveBeenCalledTimes(1)
   })
 })
