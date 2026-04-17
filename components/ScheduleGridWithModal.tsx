@@ -230,6 +230,7 @@ export default function ScheduleGridWithModal({
                     <TimePickerField
                       id="calendar-shift-start"
                       name="startTime"
+                      defaultValue="09:00"
                       max="19:59"
                       required
                     />
@@ -239,6 +240,7 @@ export default function ScheduleGridWithModal({
                     <TimePickerField
                       id="calendar-shift-end"
                       name="endTime"
+                      defaultValue="17:00"
                       max="20:00"
                       required
                     />
