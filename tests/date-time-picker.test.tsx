@@ -40,7 +40,7 @@ describe('date-time picker parsing helpers', () => {
   })
 
   it('renders the date field as a native date input', () => {
-    render(
+    const { container } = render(
       <DatePickerField
         id="shift-date"
         name="shiftDate"
@@ -57,10 +57,11 @@ describe('date-time picker parsing helpers', () => {
     expect(input).toHaveAttribute('min', '2026-04-01')
     expect(input).toHaveAttribute('max', '2026-04-30')
     expect(input).toBeRequired()
+    expect(container.querySelector('svg')).toBeNull()
   })
 
   it('renders the time field as a native time input', () => {
-    render(
+    const { container } = render(
       <TimePickerField
         id="shift-start"
         name="startTime"
@@ -79,5 +80,6 @@ describe('date-time picker parsing helpers', () => {
     expect(input).toHaveAttribute('max', '20:00')
     expect(input).toHaveAttribute('step', '900')
     expect(input).toBeRequired()
+    expect(container.querySelector('svg')).toBeNull()
   })
 })
