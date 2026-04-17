@@ -1,13 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import DatePicker from 'react-datepicker'
 import { CalendarDays, Clock3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const pickerInputClassName = [
   'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm',
-  'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
   'disabled:cursor-not-allowed disabled:opacity-50',
 ].join(' ')
 
@@ -58,51 +56,12 @@ export function parseTimeValue(value?: string) {
   return parsed
 }
 
-function timeBoundary(value: string | undefined, fallback: string) {
-  const fallbackTime = parseTimeValue(fallback)
-  return parseTimeValue(value) ?? fallbackTime ?? new Date()
+function normalizeDateValue(value?: string) {
+  return parseISODateOnly(value) ? value : undefined
 }
 
-function useMobilePortal() {
-  const [usePortal, setUsePortal] = useState(false)
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const smallScreen = window.matchMedia('(max-width: 768px)')
-    const coarsePointer = window.matchMedia('(pointer: coarse)')
-    const legacySmall = smallScreen as MediaQueryList & {
-      addListener?: (callback: (event: MediaQueryListEvent) => void) => void
-      removeListener?: (callback: (event: MediaQueryListEvent) => void) => void
-    }
-    const legacyCoarse = coarsePointer as MediaQueryList & {
-      addListener?: (callback: (event: MediaQueryListEvent) => void) => void
-      removeListener?: (callback: (event: MediaQueryListEvent) => void) => void
-    }
-    const update = () => {
-      setUsePortal(smallScreen.matches || coarsePointer.matches)
-    }
-
-    update()
-    if (typeof smallScreen.addEventListener === 'function') {
-      smallScreen.addEventListener('change', update)
-      coarsePointer.addEventListener('change', update)
-    } else {
-      legacySmall.addListener?.(update)
-      legacyCoarse.addListener?.(update)
-    }
-    return () => {
-      if (typeof smallScreen.removeEventListener === 'function') {
-        smallScreen.removeEventListener('change', update)
-        coarsePointer.removeEventListener('change', update)
-      } else {
-        legacySmall.removeListener?.(update)
-        legacyCoarse.removeListener?.(update)
-      }
-    }
-  }, [])
-
-  return usePortal
+function normalizeTimeValue(value?: string) {
+  return parseTimeValue(value) ? value : undefined
 }
 
 export function DatePickerField({
@@ -115,33 +74,19 @@ export function DatePickerField({
   min,
   max,
 }: DatePickerFieldProps) {
-  const [selected, setSelected] = useState<Date | null>(() => parseISODateOnly(defaultValue))
-  const minDate = useMemo(() => parseISODateOnly(min), [min])
-  const maxDate = useMemo(() => parseISODateOnly(max), [max])
-  const withMobilePortal = useMobilePortal()
-
   return (
     <div className={cn('relative', className)}>
-      <DatePicker
+      <input
         id={id}
         name={name}
-        selected={selected}
-        onChange={(nextDate: Date | null) => setSelected(nextDate)}
+        type="date"
+        aria-label="Date picker"
+        defaultValue={normalizeDateValue(defaultValue)}
         required={required}
         disabled={disabled}
-        minDate={minDate ?? undefined}
-        maxDate={maxDate ?? undefined}
-        dateFormat="yyyy-MM-dd"
-        placeholderText="YYYY-MM-DD"
-        autoComplete="off"
-        readOnly
-        preventOpenOnFocus
-        showPopperArrow={false}
-        withPortal={withMobilePortal}
-        className={pickerInputClassName}
-        wrapperClassName="w-full app-datepicker-wrapper"
-        popperClassName="app-datepicker-popper"
-        calendarClassName="app-datepicker-calendar"
+        min={normalizeDateValue(min)}
+        max={normalizeDateValue(max)}
+        className={cn(pickerInputClassName, '[color-scheme:light] dark:[color-scheme:dark]')}
       />
       <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
     </div>
@@ -158,35 +103,21 @@ export function TimePickerField({
   max,
   timeIntervals = 15,
 }: TimePickerFieldProps) {
-  const [selected, setSelected] = useState<Date | null>(() => parseTimeValue(defaultValue))
-  const minTime = useMemo(() => timeBoundary(min, '00:00'), [min])
-  const maxTime = useMemo(() => timeBoundary(max, '23:59'), [max])
-  const withMobilePortal = useMobilePortal()
+  const step = Math.max(1, timeIntervals) * 60
 
   return (
     <div className={cn('relative', className)}>
-      <DatePicker
+      <input
         id={id}
         name={name}
-        selected={selected}
-        onChange={(nextTime: Date | null) => setSelected(nextTime)}
+        type="time"
+        aria-label="Time picker"
+        defaultValue={normalizeTimeValue(defaultValue)}
         required={required}
-        minTime={minTime}
-        maxTime={maxTime}
-        showTimeSelect
-        showTimeSelectOnly
-        timeIntervals={timeIntervals}
-        dateFormat="HH:mm"
-        placeholderText="HH:MM"
-        autoComplete="off"
-        readOnly
-        preventOpenOnFocus
-        showPopperArrow={false}
-        withPortal={withMobilePortal}
-        className={pickerInputClassName}
-        wrapperClassName="w-full app-datepicker-wrapper"
-        popperClassName="app-datepicker-popper"
-        calendarClassName="app-datepicker-calendar"
+        min={normalizeTimeValue(min)}
+        max={normalizeTimeValue(max)}
+        step={step}
+        className={cn(pickerInputClassName, '[color-scheme:light] dark:[color-scheme:dark]')}
       />
       <Clock3 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
     </div>
