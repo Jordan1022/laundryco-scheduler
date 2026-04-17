@@ -170,6 +170,11 @@
 }
 
 @layer components {
+  .app-native-picker-input {
+    -webkit-appearance: none;
+    -moz-appearance: textfield;
+  }
+
   .app-native-picker-input::-webkit-calendar-picker-indicator {
     position: absolute;
     inset: 0;
@@ -179,7 +184,17 @@
     padding: 0;
     opacity: 0;
     cursor: pointer;
-    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  .app-native-picker-input::-webkit-inner-spin-button,
+  .app-native-picker-input::-webkit-clear-button {
+    display: none;
+    -webkit-appearance: none;
+  }
+
+  .app-native-picker-input::-webkit-date-and-time-value {
+    text-align: left;
   }
 
   .app-datepicker-wrapper {
