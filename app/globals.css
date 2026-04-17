@@ -171,14 +171,15 @@
 
 @layer components {
   .app-native-picker-input::-webkit-calendar-picker-indicator {
-    opacity: 0.72;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
     cursor: pointer;
-    transition: opacity 150ms ease;
-  }
-
-  .app-native-picker-input:hover::-webkit-calendar-picker-indicator,
-  .app-native-picker-input:focus::-webkit-calendar-picker-indicator {
-    opacity: 1;
+    appearance: none;
   }
 
   .app-datepicker-wrapper {

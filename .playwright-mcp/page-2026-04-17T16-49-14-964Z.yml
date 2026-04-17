@@ -1,0 +1,65 @@
+- generic [ref=e1]:
+  - alert [ref=e19]
+  - generic [ref=e181]:
+    - banner [ref=e182]:
+      - generic [ref=e183]:
+        - generic [ref=e184]:
+          - generic [ref=e186]: LC
+          - generic [ref=e187]:
+            - heading "Scheduler Admin" [level=1] [ref=e188]
+            - paragraph [ref=e189]: Running operations for Jordan. Review requests first, then adjust staffing and publish shifts.
+        - generic [ref=e190]:
+          - link "Team View" [ref=e191] [cursor=pointer]:
+            - /url: /dashboard
+          - button "Sign Out" [ref=e192] [cursor=pointer]
+    - main [ref=e193]:
+      - generic [ref=e194]:
+        - generic [ref=e196]:
+          - paragraph [ref=e197]: Pending Requests
+          - paragraph [ref=e198]: "0"
+          - paragraph [ref=e199]: Time off and swaps
+        - generic [ref=e201]:
+          - paragraph [ref=e202]: Unfilled Shifts
+          - paragraph [ref=e203]: "0"
+          - paragraph [ref=e204]: Next 0 shifts
+        - generic [ref=e206]:
+          - paragraph [ref=e207]: Team Members
+          - paragraph [ref=e208]: "8"
+          - paragraph [ref=e209]: Schedulable users
+        - generic [ref=e211]:
+          - paragraph [ref=e212]: Hours This Week
+          - paragraph [ref=e213]: "0"
+          - paragraph [ref=e214]: Assigned only
+      - navigation "Admin sections" [ref=e215]:
+        - generic [ref=e216]:
+          - link "Overview" [ref=e217] [cursor=pointer]:
+            - /url: /admin?tab=overview
+            - generic [ref=e218]: Overview
+          - link "Shifts" [ref=e220] [cursor=pointer]:
+            - /url: /admin?tab=shifts
+            - generic [ref=e221]: Shifts
+          - link "Requests" [ref=e223] [cursor=pointer]:
+            - /url: /admin?tab=requests
+            - generic [ref=e224]: Requests
+          - link "Staff" [ref=e226] [cursor=pointer]:
+            - /url: /admin?tab=staff
+            - generic [ref=e227]: Staff
+      - generic [ref=e265]:
+        - generic [ref=e266]:
+          - heading "Upcoming shifts" [level=2] [ref=e267]
+          - paragraph [ref=e268]: Tap a row to edit or reassign. Shifts default to Laundry Shift at Main Store.
+        - generic [ref=e269]:
+          - button "New Shift" [ref=e270] [cursor=pointer]:
+            - img [ref=e271]
+            - text: New Shift
+          - button "Bulk Schedule" [ref=e272] [cursor=pointer]:
+            - img [ref=e273]
+            - text: Bulk Schedule
+      - generic [ref=e275]:
+        - generic [ref=e278]: No upcoming shifts yet.
+        - generic [ref=e279]:
+          - heading "Coverage by day" [level=3] [ref=e281]
+          - paragraph [ref=e283]: No active shifts in this range.
+  - button "Switch to light mode" [active] [ref=e317] [cursor=pointer]:
+    - img [ref=e318]
+    - generic [ref=e23]: Light mode

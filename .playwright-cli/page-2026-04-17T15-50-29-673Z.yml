@@ -1,0 +1,90 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e19]
+  - generic [ref=e163]:
+    - banner [ref=e164]:
+      - generic [ref=e165]:
+        - generic [ref=e166]:
+          - generic [ref=e168]: LC
+          - generic [ref=e169]:
+            - heading "Scheduler Admin" [level=1] [ref=e170]
+            - paragraph [ref=e171]: Running operations for Admin User. Review requests first, then adjust staffing and publish shifts.
+        - generic [ref=e172]:
+          - link "Team View" [ref=e173] [cursor=pointer]:
+            - /url: /dashboard
+          - button "Sign Out" [ref=e174] [cursor=pointer]
+    - main [ref=e175]:
+      - generic [ref=e176]:
+        - generic [ref=e178]:
+          - paragraph [ref=e179]: Pending Requests
+          - paragraph [ref=e180]: "0"
+          - paragraph [ref=e181]: Time off and swaps
+        - generic [ref=e183]:
+          - paragraph [ref=e184]: Unfilled Shifts
+          - paragraph [ref=e185]: "1"
+          - paragraph [ref=e186]: Next 1 shifts
+        - generic [ref=e188]:
+          - paragraph [ref=e189]: Team Members
+          - paragraph [ref=e190]: "8"
+          - paragraph [ref=e191]: Schedulable users
+        - generic [ref=e193]:
+          - paragraph [ref=e194]: Hours This Week
+          - paragraph [ref=e195]: "0"
+          - paragraph [ref=e196]: Assigned only
+      - navigation "Admin sections" [ref=e197]:
+        - generic [ref=e198]:
+          - link "Overview" [ref=e199] [cursor=pointer]:
+            - /url: /admin?tab=overview
+            - generic [ref=e200]: Overview
+          - link "Shifts" [ref=e202] [cursor=pointer]:
+            - /url: /admin?tab=shifts
+            - generic [ref=e203]: Shifts
+          - link "Requests" [ref=e205] [cursor=pointer]:
+            - /url: /admin?tab=requests
+            - generic [ref=e206]: Requests
+          - link "Staff" [ref=e208] [cursor=pointer]:
+            - /url: /admin?tab=staff
+            - generic [ref=e209]: Staff
+      - status [ref=e299]:
+        - img [ref=e300]
+        - paragraph [ref=e303]: Shift created.
+        - link "Dismiss" [ref=e304] [cursor=pointer]:
+          - /url: /admin?tab=overview
+          - img [ref=e305]
+      - generic [ref=e308]:
+        - generic [ref=e309]:
+          - heading "Start here" [level=3] [ref=e311]
+          - generic [ref=e312]:
+            - generic [ref=e313]:
+              - paragraph [ref=e314]: 1. Clear approvals
+              - paragraph [ref=e315]: Time-off and swap requests before changing staffing.
+            - generic [ref=e316]:
+              - paragraph [ref=e317]: 2. Fill open coverage
+              - paragraph [ref=e318]: Use shifts and bulk scheduling to close gaps.
+            - generic [ref=e319]:
+              - paragraph [ref=e320]: 3. Publish with confidence
+              - paragraph [ref=e321]: Publish once coverage looks right so staff gets one clear update.
+        - generic [ref=e322]:
+          - heading "Quick actions" [level=3] [ref=e324]
+          - generic [ref=e325]:
+            - link "New Shift" [ref=e326] [cursor=pointer]:
+              - /url: /admin?tab=shifts&create=shift
+              - img [ref=e327]
+              - text: New Shift
+            - link "Bulk Schedule" [ref=e329] [cursor=pointer]:
+              - /url: /admin?tab=shifts&create=bulk
+              - img [ref=e330]
+              - text: Bulk Schedule
+            - link "Add Staff" [ref=e332] [cursor=pointer]:
+              - /url: /admin?tab=staff&create=staff
+              - img [ref=e333]
+              - text: Add Staff
+            - link "Review Requests" [ref=e336] [cursor=pointer]:
+              - /url: /admin?tab=requests
+              - img [ref=e337]
+              - text: Review Requests
+            - button "Publish All Drafts" [ref=e341] [cursor=pointer]:
+              - img [ref=e342]
+              - text: Publish All Drafts
+  - button "Switch to dark mode" [ref=e20] [cursor=pointer]:
+    - img [ref=e21]
+    - generic [ref=e23]: Dark mode
