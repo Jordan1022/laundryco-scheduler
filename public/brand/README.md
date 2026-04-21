@@ -4,7 +4,7 @@ Logo artwork for `<Brandmark variant="..." />`.
 
 | File in this folder | `variant` prop |
 |---|---|
-| `wordmark-leaguecity-above.png` | `wordmark-leaguecity` |
+| `wordmark-leaguecity-below-script.png` | `wordmark-leaguecity` |
 | `mascot-washer-character.png` | `mascot` |
 
 See `BRAND.md` §4 for usage rules (clear space, minimum size, recolor/stretch restrictions).

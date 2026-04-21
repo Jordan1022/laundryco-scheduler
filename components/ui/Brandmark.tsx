@@ -37,9 +37,9 @@ const artworkSizePx: Record<BrandmarkSize, number> = {
 // Filenames map to actual files in /public/brand/. Add new variants as artwork lands.
 const variantSources: Record<Exclude<BrandmarkVariant, 'stamp'>, { src: string; alt: string; aspect: number }> = {
   'wordmark-leaguecity': {
-    src: '/brand/wordmark-leaguecity-above.png',
+    src: '/brand/wordmark-leaguecity-below-script.png',
     alt: 'The Laundry Co. — League City',
-    aspect: 1.52,
+    aspect: 1.7,
   },
   mascot: {
     src: '/brand/mascot-washer-character.png',

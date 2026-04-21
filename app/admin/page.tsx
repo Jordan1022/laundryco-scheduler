@@ -1862,7 +1862,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     <div className="relative min-h-screen">
       <header className="relative border-b border-ink/15 bg-paper/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <Brandmark size="md" withWordmark subtitle="Admin office" />
+          <Brandmark variant="wordmark-leaguecity" size="md" />
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button asChild variant="outline" size="sm">
               <Link href="/dashboard">← Team view</Link>

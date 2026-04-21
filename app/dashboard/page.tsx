@@ -657,7 +657,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     <div className="relative min-h-screen">
       <header className="relative border-b border-ink/15 bg-paper/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <Brandmark size="md" withWordmark subtitle={canManageStaff ? 'Employee view' : 'Staff workspace'} />
+          <Brandmark variant="wordmark-leaguecity" size="md" />
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Stamp tone="muted">{role}</Stamp>
             {canManageStaff ? (
