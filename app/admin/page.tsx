@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DatePickerField, TimePickerField } from '@/components/ui/date-time-picker'
 import TempPasswordField from '@/components/TempPasswordField'
-import BulkRangeFields from '@/components/BulkRangeFields'
+import StandardScheduleForm from '@/components/StandardScheduleForm'
+import RecurringAssignmentsForm from '@/components/RecurringAssignmentsForm'
 import ConfirmSubmitButton from '@/components/ConfirmSubmitButton'
 import AdminTabs, { resolveAdminTab } from '@/components/AdminTabs'
 import AdminToast from '@/components/AdminToast'
@@ -20,22 +21,19 @@ import SignOutButton from '@/components/SignOutButton'
 import bcrypt from 'bcryptjs'
 import { notifyUsers } from '@/lib/notifications'
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
+import {
+  STANDARD_SCHEDULE_HORIZON_DAYS,
+  buildStandardShiftInputs,
+  shiftKey,
+  type StandardShiftBlock,
+} from '@/lib/standardSchedule'
 
 const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 const timeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' })
 const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 const CLOSING_TIME_MINUTES = 20 * 60 // 8:00 PM
 const ACTIVE_ROLES = ['employee', 'manager', 'admin'] as const
-const WEEKDAY_OPTIONS = [
-  { value: 1, label: 'Mon' },
-  { value: 2, label: 'Tue' },
-  { value: 3, label: 'Wed' },
-  { value: 4, label: 'Thu' },
-  { value: 5, label: 'Fri' },
-  { value: 6, label: 'Sat' },
-  { value: 0, label: 'Sun' },
-] as const
-const MAX_BULK_RANGE_DAYS = 93
+const DB_INSERT_CHUNK = 500
 
 type ActiveRole = typeof ACTIVE_ROLES[number]
 
@@ -109,25 +107,6 @@ function parseDateOnly(value: string) {
   if (Number.isNaN(parsed.getTime())) return null
   parsed.setHours(0, 0, 0, 0)
   return parsed
-}
-
-function plusDays(base: Date, days: number) {
-  const date = new Date(base)
-  date.setDate(date.getDate() + days)
-  return date
-}
-
-function endDateFromPreset(startDate: Date, rangePreset: string, customEndDateRaw: string) {
-  if (rangePreset === 'custom') {
-    return parseDateOnly(customEndDateRaw)
-  }
-  if (rangePreset === 'ongoing') {
-    return plusDays(startDate, MAX_BULK_RANGE_DAYS - 1)
-  }
-  if (rangePreset === 'month') {
-    return plusDays(startDate, 29)
-  }
-  return plusDays(startDate, 6)
 }
 
 async function requireManagerSession() {
@@ -209,56 +188,44 @@ async function createShiftAction(formData: FormData) {
   redirect('/admin?status=shift-created#create-shift')
 }
 
-async function createBulkScheduleAction(formData: FormData) {
+async function applyStandardScheduleAction(formData: FormData) {
   'use server'
 
   const session = await requireManagerSession()
 
-  const title = DEFAULT_SHIFT_TITLE
-  const location = DEFAULT_SHIFT_LOCATION
-  const notes = String(formData.get('notes') ?? '').trim()
   const startDateRaw = String(formData.get('startDate') ?? '')
-  const customEndDateRaw = String(formData.get('endDate') ?? '')
-  const rangePreset = String(formData.get('rangePreset') ?? 'week')
-  const startTime = String(formData.get('startTime') ?? '')
-  const endTime = String(formData.get('endTime') ?? '')
   const assignedUserId = String(formData.get('assignedUserId') ?? '')
   const requestedStatus = String(formData.get('status') ?? 'published')
   const status = requestedStatus === 'draft' ? 'draft' : 'published'
 
-  if (!startDateRaw || !startTime || !endTime) {
-    redirect('/admin?error=bulk-missing-fields#bulk-schedule')
+  const weekdayBlocks: StandardShiftBlock[] = [
+    { start: String(formData.get('weekday1Start') ?? ''), end: String(formData.get('weekday1End') ?? '') },
+    { start: String(formData.get('weekday2Start') ?? ''), end: String(formData.get('weekday2End') ?? '') },
+  ]
+  const weekendBlocks: StandardShiftBlock[] = [
+    { start: String(formData.get('weekend1Start') ?? ''), end: String(formData.get('weekend1End') ?? '') },
+    { start: String(formData.get('weekend2Start') ?? ''), end: String(formData.get('weekend2End') ?? '') },
+  ]
+  const allBlocks = [...weekdayBlocks, ...weekendBlocks]
+
+  if (!startDateRaw || allBlocks.some((block) => !block.start || !block.end)) {
+    redirect('/admin?error=standard-missing-fields#standard-schedule')
   }
 
-  const selectedDays = new Set<number>()
-  for (const rawDay of formData.getAll('daysOfWeek')) {
-    const day = Number(rawDay)
-    if (Number.isInteger(day) && day >= 0 && day <= 6) {
-      selectedDays.add(day)
+  for (const block of allBlocks) {
+    const startMinutes = parseTimeToMinutes(block.start)
+    const endMinutes = parseTimeToMinutes(block.end)
+    if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
+      redirect('/admin?error=standard-invalid-time#standard-schedule')
     }
-  }
-  if (selectedDays.size === 0) {
-    redirect('/admin?error=bulk-no-days-selected#bulk-schedule')
+    if (startMinutes >= CLOSING_TIME_MINUTES || endMinutes > CLOSING_TIME_MINUTES) {
+      redirect('/admin?error=standard-after-hours#standard-schedule')
+    }
   }
 
   const startDate = parseDateOnly(startDateRaw)
-  const endDate = startDate ? endDateFromPreset(startDate, rangePreset, customEndDateRaw) : null
-  if (!startDate || !endDate || endDate < startDate) {
-    redirect('/admin?error=bulk-invalid-range#bulk-schedule')
-  }
-
-  const dayCount = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
-  if (dayCount > MAX_BULK_RANGE_DAYS) {
-    redirect('/admin?error=bulk-range-too-large#bulk-schedule')
-  }
-
-  const startMinutes = parseTimeToMinutes(startTime)
-  const endMinutes = parseTimeToMinutes(endTime)
-  if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
-    redirect('/admin?error=bulk-invalid-time#bulk-schedule')
-  }
-  if (startMinutes >= CLOSING_TIME_MINUTES || endMinutes > CLOSING_TIME_MINUTES) {
-    redirect('/admin?error=bulk-after-hours#bulk-schedule')
+  if (!startDate) {
+    redirect('/admin?error=standard-missing-fields#standard-schedule')
   }
 
   if (assignedUserId) {
@@ -268,73 +235,344 @@ async function createBulkScheduleAction(formData: FormData) {
       .limit(1)
 
     if (!assignedUser) {
-      redirect('/admin?error=bulk-invalid-assignee#bulk-schedule')
+      redirect('/admin?error=standard-invalid-assignee#standard-schedule')
     }
   }
 
-  const shiftInputs: {
-    title: string
-    location: string | null
-    notes: string | null
-    startTime: Date
-    endTime: Date
-    status: 'draft' | 'published'
-    createdBy: string
-  }[] = []
-
-  for (let cursor = new Date(startDate); cursor <= endDate; cursor = plusDays(cursor, 1)) {
-    if (!selectedDays.has(cursor.getDay())) continue
-
-    const dateValue = formatDateInput(cursor)
-    const shiftStart = parseLocalDateTime(dateValue, startTime)
-    const shiftEnd = parseLocalDateTime(dateValue, endTime)
-    if (!shiftStart || !shiftEnd || shiftEnd <= shiftStart) continue
-
-    shiftInputs.push({
-      title,
-      location,
-      notes: notes || null,
-      startTime: shiftStart,
-      endTime: shiftEnd,
-      status,
-      createdBy: session.user.id,
-    })
-  }
-
-  if (shiftInputs.length === 0) {
-    redirect('/admin?error=bulk-no-matching-days#bulk-schedule')
-  }
-
-  const insertedShifts = await db.transaction(async (tx) => {
-    const created = await tx.insert(shifts).values(shiftInputs).returning({
-      id: shifts.id,
-      startTime: shifts.startTime,
-      endTime: shifts.endTime,
-    })
-
-    if (assignedUserId && created.length > 0) {
-      await tx.insert(assignments).values(created.map((shift) => ({
-        shiftId: shift.id,
-        userId: assignedUserId,
-        status: 'assigned',
-      })))
-    }
-
-    return created
+  const candidates = buildStandardShiftInputs({
+    startDate,
+    horizonDays: STANDARD_SCHEDULE_HORIZON_DAYS,
+    weekdayBlocks,
+    weekendBlocks,
   })
 
-  if (assignedUserId && status !== 'draft' && insertedShifts.length > 0) {
-    const firstShift = insertedShifts[0]
-    const lastShift = insertedShifts[insertedShifts.length - 1]
+  if (candidates.length === 0) {
+    redirect('/admin?error=standard-no-shifts#standard-schedule')
+  }
+
+  const replaceMismatched = formData.get('replaceMismatched') === 'on'
+
+  const horizonEnd = new Date(candidates[candidates.length - 1].startTime)
+  horizonEnd.setDate(horizonEnd.getDate() + 1)
+
+  const existingRows = await db.select({
+    id: shifts.id,
+    startTime: shifts.startTime,
+    endTime: shifts.endTime,
+    status: shifts.status,
+  })
+    .from(shifts)
+    .where(and(gte(shifts.startTime, startDate), lt(shifts.startTime, horizonEnd)))
+
+  const existingKeys = new Set(existingRows.map((row) => shiftKey(row.startTime, row.endTime)))
+  const candidateKeys = new Set(candidates.map((c) => shiftKey(c.startTime, c.endTime)))
+
+  const toInsert = candidates
+    .filter((candidate) => !existingKeys.has(shiftKey(candidate.startTime, candidate.endTime)))
+    .map((candidate) => ({
+      title: DEFAULT_SHIFT_TITLE,
+      location: DEFAULT_SHIFT_LOCATION,
+      notes: null,
+      startTime: candidate.startTime,
+      endTime: candidate.endTime,
+      status,
+      createdBy: session.user.id,
+    }))
+
+  const mismatchedNonCancelledIds = existingRows
+    .filter((row) => row.status !== 'cancelled' && !candidateKeys.has(shiftKey(row.startTime, row.endTime)))
+    .map((row) => row.id)
+
+  let mismatchedUnassignedIds: string[] = []
+  if (mismatchedNonCancelledIds.length > 0) {
+    const assignedMismatched = new Set<string>()
+    for (let i = 0; i < mismatchedNonCancelledIds.length; i += DB_INSERT_CHUNK) {
+      const chunk = mismatchedNonCancelledIds.slice(i, i + DB_INSERT_CHUNK)
+      const rows = await db.select({ shiftId: assignments.shiftId })
+        .from(assignments)
+        .where(inArray(assignments.shiftId, chunk))
+      for (const row of rows) assignedMismatched.add(row.shiftId)
+    }
+    mismatchedUnassignedIds = mismatchedNonCancelledIds.filter((id) => !assignedMismatched.has(id))
+  }
+
+  const deletableMismatchedIds = replaceMismatched ? mismatchedUnassignedIds : []
+  const unresolvedConflicts = replaceMismatched ? 0 : mismatchedUnassignedIds.length
+
+  if (toInsert.length === 0 && deletableMismatchedIds.length === 0) {
+    redirect(`/admin?status=standard-applied&count=0&conflicts=${unresolvedConflicts}#standard-schedule`)
+  }
+
+  const inserted: Array<{ id: string; startTime: Date; endTime: Date }> = []
+  await db.transaction(async (tx) => {
+    for (let i = 0; i < deletableMismatchedIds.length; i += DB_INSERT_CHUNK) {
+      const chunk = deletableMismatchedIds.slice(i, i + DB_INSERT_CHUNK)
+      await tx.delete(shifts).where(inArray(shifts.id, chunk))
+    }
+
+    for (let i = 0; i < toInsert.length; i += DB_INSERT_CHUNK) {
+      const chunk = toInsert.slice(i, i + DB_INSERT_CHUNK)
+      const rows = await tx.insert(shifts).values(chunk).returning({
+        id: shifts.id,
+        startTime: shifts.startTime,
+        endTime: shifts.endTime,
+      })
+      inserted.push(...rows)
+    }
+
+    if (assignedUserId && inserted.length > 0) {
+      for (let i = 0; i < inserted.length; i += DB_INSERT_CHUNK) {
+        const chunk = inserted.slice(i, i + DB_INSERT_CHUNK).map((shift) => ({
+          shiftId: shift.id,
+          userId: assignedUserId,
+          status: 'assigned' as const,
+        }))
+        await tx.insert(assignments).values(chunk)
+      }
+    }
+  })
+
+  if (assignedUserId && status !== 'draft' && inserted.length > 0) {
+    const firstShift = inserted[0]
+    const lastShift = inserted[inserted.length - 1]
     await notifyUsers([{
       userId: assignedUserId,
-      title: 'Recurring shifts assigned',
-      body: `You were assigned to ${insertedShifts.length} shifts from ${formatShiftDateTime(firstShift.startTime, firstShift.endTime)} to ${formatShiftDateTime(lastShift.startTime, lastShift.endTime)}.`,
+      title: 'Standard schedule assigned',
+      body: `You were assigned to ${inserted.length} shifts from ${formatShiftDateTime(firstShift.startTime, firstShift.endTime)} to ${formatShiftDateTime(lastShift.startTime, lastShift.endTime)}.`,
       link: '/dashboard',
     }])
   }
 
-  redirect(`/admin?status=bulk-shifts-created&count=${insertedShifts.length}#bulk-schedule`)
+  redirect(
+    `/admin?status=standard-applied&count=${inserted.length}`
+    + `&replaced=${deletableMismatchedIds.length}`
+    + `&conflicts=${unresolvedConflicts}`
+    + `#standard-schedule`,
+  )
+}
+
+async function assignRecurringAction(formData: FormData) {
+  'use server'
+
+  await requireManagerSession()
+
+  const assignedUserId = String(formData.get('assignedUserId') ?? '')
+  const startDateRaw = String(formData.get('startDate') ?? '')
+  const startTimeRaw = String(formData.get('startTime') ?? '')
+  const endTimeRaw = String(formData.get('endTime') ?? '')
+
+  const selectedDays = new Set<number>()
+  for (const raw of formData.getAll('daysOfWeek')) {
+    const day = Number(raw)
+    if (Number.isInteger(day) && day >= 0 && day <= 6) selectedDays.add(day)
+  }
+
+  if (!assignedUserId || !startDateRaw || !startTimeRaw || !endTimeRaw) {
+    redirect('/admin?error=recurring-missing-fields#recurring-assignments')
+  }
+  if (selectedDays.size === 0) {
+    redirect('/admin?error=recurring-no-days#recurring-assignments')
+  }
+
+  const blockStartMin = parseTimeToMinutes(startTimeRaw)
+  const blockEndMin = parseTimeToMinutes(endTimeRaw)
+  if (blockStartMin === null || blockEndMin === null || blockEndMin <= blockStartMin) {
+    redirect('/admin?error=recurring-invalid-time#recurring-assignments')
+  }
+  if (blockStartMin >= CLOSING_TIME_MINUTES || blockEndMin > CLOSING_TIME_MINUTES) {
+    redirect('/admin?error=recurring-after-hours#recurring-assignments')
+  }
+
+  const startDate = parseDateOnly(startDateRaw)
+  if (!startDate) {
+    redirect('/admin?error=recurring-missing-fields#recurring-assignments')
+  }
+
+  const [assignedUser] = await db.select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.id, assignedUserId), ne(users.role, 'inactive')))
+    .limit(1)
+  if (!assignedUser) {
+    redirect('/admin?error=recurring-invalid-user#recurring-assignments')
+  }
+
+  const futureShifts = await db.select({
+    id: shifts.id,
+    startTime: shifts.startTime,
+    endTime: shifts.endTime,
+    status: shifts.status,
+  })
+    .from(shifts)
+    .where(and(gte(shifts.startTime, startDate), ne(shifts.status, 'cancelled')))
+
+  const matchingShifts = futureShifts.filter((shift) => {
+    if (!selectedDays.has(shift.startTime.getDay())) return false
+    const s = shift.startTime.getHours() * 60 + shift.startTime.getMinutes()
+    const e = shift.endTime.getHours() * 60 + shift.endTime.getMinutes()
+    return s === blockStartMin && e === blockEndMin
+  })
+
+  if (matchingShifts.length === 0) {
+    redirect('/admin?status=recurring-assigned&count=0&skipped=0#recurring-assignments')
+  }
+
+  const matchingIds = matchingShifts.map((s) => s.id)
+  const existingAssignmentShiftIds = new Set<string>()
+  for (let i = 0; i < matchingIds.length; i += DB_INSERT_CHUNK) {
+    const chunk = matchingIds.slice(i, i + DB_INSERT_CHUNK)
+    const rows = await db.select({ shiftId: assignments.shiftId })
+      .from(assignments)
+      .where(inArray(assignments.shiftId, chunk))
+    for (const row of rows) existingAssignmentShiftIds.add(row.shiftId)
+  }
+
+  const unassignedMatching = matchingShifts.filter((s) => !existingAssignmentShiftIds.has(s.id))
+  const skippedCount = matchingShifts.length - unassignedMatching.length
+
+  if (unassignedMatching.length === 0) {
+    redirect(`/admin?status=recurring-assigned&count=0&skipped=${skippedCount}#recurring-assignments`)
+  }
+
+  const rows = unassignedMatching.map((shift) => ({
+    shiftId: shift.id,
+    userId: assignedUserId,
+    status: 'assigned' as const,
+  }))
+  for (let i = 0; i < rows.length; i += DB_INSERT_CHUNK) {
+    await db.insert(assignments).values(rows.slice(i, i + DB_INSERT_CHUNK))
+  }
+
+  const publishedCount = unassignedMatching.filter((s) => s.status !== 'draft').length
+  if (publishedCount > 0) {
+    await notifyUsers([{
+      userId: assignedUserId,
+      title: 'Recurring shifts assigned',
+      body: `You are now assigned to ${publishedCount} recurring shift${publishedCount === 1 ? '' : 's'}.`,
+      link: '/dashboard',
+    }])
+  }
+
+  redirect(`/admin?status=recurring-assigned&count=${unassignedMatching.length}&skipped=${skippedCount}#recurring-assignments`)
+}
+
+async function unassignRecurringAction(formData: FormData) {
+  'use server'
+
+  await requireManagerSession()
+
+  const assignedUserId = String(formData.get('assignedUserId') ?? '')
+  const startDateRaw = String(formData.get('startDate') ?? '')
+  const startTimeRaw = String(formData.get('startTime') ?? '')
+  const endTimeRaw = String(formData.get('endTime') ?? '')
+
+  const selectedDays = new Set<number>()
+  for (const raw of formData.getAll('daysOfWeek')) {
+    const day = Number(raw)
+    if (Number.isInteger(day) && day >= 0 && day <= 6) selectedDays.add(day)
+  }
+
+  if (!assignedUserId || !startDateRaw || !startTimeRaw || !endTimeRaw) {
+    redirect('/admin?error=recurring-missing-fields#recurring-assignments')
+  }
+  if (selectedDays.size === 0) {
+    redirect('/admin?error=recurring-no-days#recurring-assignments')
+  }
+
+  const blockStartMin = parseTimeToMinutes(startTimeRaw)
+  const blockEndMin = parseTimeToMinutes(endTimeRaw)
+  if (blockStartMin === null || blockEndMin === null || blockEndMin <= blockStartMin) {
+    redirect('/admin?error=recurring-invalid-time#recurring-assignments')
+  }
+
+  const startDate = parseDateOnly(startDateRaw)
+  if (!startDate) {
+    redirect('/admin?error=recurring-missing-fields#recurring-assignments')
+  }
+
+  const futureAssignments = await db.select({
+    assignmentId: assignments.id,
+    shiftStatus: shifts.status,
+    startTime: shifts.startTime,
+    endTime: shifts.endTime,
+  })
+    .from(assignments)
+    .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
+    .where(and(
+      eq(assignments.userId, assignedUserId),
+      gte(shifts.startTime, startDate),
+      ne(shifts.status, 'cancelled'),
+    ))
+
+  const matching = futureAssignments.filter((row) => {
+    if (!selectedDays.has(row.startTime.getDay())) return false
+    const s = row.startTime.getHours() * 60 + row.startTime.getMinutes()
+    const e = row.endTime.getHours() * 60 + row.endTime.getMinutes()
+    return s === blockStartMin && e === blockEndMin
+  })
+
+  if (matching.length === 0) {
+    redirect('/admin?status=recurring-unassigned&count=0#recurring-assignments')
+  }
+
+  const assignmentIds = matching.map((m) => m.assignmentId)
+  for (let i = 0; i < assignmentIds.length; i += DB_INSERT_CHUNK) {
+    const chunk = assignmentIds.slice(i, i + DB_INSERT_CHUNK)
+    await db.delete(assignments).where(inArray(assignments.id, chunk))
+  }
+
+  const publishedCount = matching.filter((m) => m.shiftStatus !== 'draft').length
+  if (publishedCount > 0) {
+    await notifyUsers([{
+      userId: assignedUserId,
+      title: 'Recurring shifts removed',
+      body: `You are no longer assigned to ${publishedCount} recurring shift${publishedCount === 1 ? '' : 's'}.`,
+      link: '/dashboard',
+    }])
+  }
+
+  redirect(`/admin?status=recurring-unassigned&count=${matching.length}#recurring-assignments`)
+}
+
+async function clearFutureShiftsAction(formData: FormData) {
+  'use server'
+
+  await requireManagerSession()
+
+  const cutoffDateRaw = String(formData.get('cutoffDate') ?? '')
+  const cutoffDate = parseDateOnly(cutoffDateRaw)
+  if (!cutoffDate) {
+    redirect('/admin?error=clear-missing-date#standard-schedule')
+  }
+
+  const futureShifts = await db.select({ id: shifts.id })
+    .from(shifts)
+    .where(and(gte(shifts.startTime, cutoffDate), ne(shifts.status, 'cancelled')))
+
+  if (futureShifts.length === 0) {
+    redirect('/admin?status=future-cleared&count=0#standard-schedule')
+  }
+
+  const futureShiftIds = futureShifts.map((row) => row.id)
+  const assignedShiftIds = new Set<string>()
+  for (let i = 0; i < futureShiftIds.length; i += DB_INSERT_CHUNK) {
+    const chunk = futureShiftIds.slice(i, i + DB_INSERT_CHUNK)
+    const rows = await db.select({ shiftId: assignments.shiftId })
+      .from(assignments)
+      .where(inArray(assignments.shiftId, chunk))
+    for (const row of rows) assignedShiftIds.add(row.shiftId)
+  }
+
+  const deletableIds = futureShiftIds.filter((id) => !assignedShiftIds.has(id))
+  if (deletableIds.length === 0) {
+    redirect('/admin?status=future-cleared&count=0#standard-schedule')
+  }
+
+  for (let i = 0; i < deletableIds.length; i += DB_INSERT_CHUNK) {
+    const chunk = deletableIds.slice(i, i + DB_INSERT_CHUNK)
+    await db.delete(shifts).where(inArray(shifts.id, chunk))
+  }
+
+  redirect(`/admin?status=future-cleared&count=${deletableIds.length}#standard-schedule`)
 }
 
 async function updateShiftAction(formData: FormData) {
@@ -1043,6 +1281,9 @@ type AdminPageProps = {
     status?: string | string[]
     error?: string | string[]
     count?: string | string[]
+    replaced?: string | string[]
+    conflicts?: string | string[]
+    skipped?: string | string[]
     openShiftId?: string | string[]
     openStaffId?: string | string[]
     tab?: string | string[]
@@ -1338,8 +1579,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const formStatus = getQueryValue(searchParams?.status)
   const formError = getQueryValue(searchParams?.error)
   const openShiftId = getQueryValue(searchParams?.openShiftId)
-  const countValue = Number(getQueryValue(searchParams?.count) ?? 0)
-  const createdBulkCount = Number.isFinite(countValue) && countValue > 0 ? Math.floor(countValue) : 0
+  const parseNonNegativeInt = (raw: string | undefined) => {
+    const n = Number(raw ?? 0)
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+  }
+  const createdBulkCount = parseNonNegativeInt(getQueryValue(searchParams?.count))
+  const replacedCount = parseNonNegativeInt(getQueryValue(searchParams?.replaced))
+  const conflictsCount = parseNonNegativeInt(getQueryValue(searchParams?.conflicts))
+  const skippedCount = parseNonNegativeInt(getQueryValue(searchParams?.skipped))
 
   const [staffRows, upcomingShiftBaseRows, weekShiftRows, pendingTimeOffRows, pendingSwapRows] = await Promise.all([
     db.select({
@@ -1507,8 +1754,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   ]
   const tabQuery = `?tab=${activeTab}`
   const openShiftCreate = getQueryValue(searchParams?.create) === 'shift'
-  const openBulkCreate = getQueryValue(searchParams?.create) === 'bulk'
+  const openStandardSchedule = getQueryValue(searchParams?.create) === 'standard'
+  const openRecurringAssignments = getQueryValue(searchParams?.create) === 'recurring'
   const openStaffCreate = getQueryValue(searchParams?.create) === 'staff'
+  const todayIso = formatDateInput(new Date())
   const openStaffEditId = getQueryValue(searchParams?.openStaffId) ?? ''
 
   return (
@@ -1573,6 +1822,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           status={formStatus}
           error={formError}
           count={createdBulkCount}
+          replaced={replacedCount}
+          conflicts={conflictsCount}
+          skipped={skippedCount}
           dismissHref={`/admin${tabQuery}`}
         />
 
@@ -1589,7 +1841,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 </div>
                 <div className="rounded-lg border bg-card p-3">
                   <p className="text-sm font-semibold">2. Fill open coverage</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Use shifts and bulk scheduling to close gaps.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Use shifts and the standard schedule to close gaps.</p>
                 </div>
                 <div className="rounded-lg border bg-card p-3">
                   <p className="text-sm font-semibold">3. Publish with confidence</p>
@@ -1610,9 +1862,15 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   </Link>
                 </Button>
                 <Button asChild className="justify-start" variant="outline">
-                  <Link href="/admin?tab=shifts&create=bulk">
+                  <Link href="/admin?tab=shifts&create=standard">
                     <CalendarDays className="mr-2 h-4 w-4" />
-                    Bulk Schedule
+                    Standard Schedule
+                  </Link>
+                </Button>
+                <Button asChild className="justify-start" variant="outline">
+                  <Link href="/admin?tab=shifts&create=recurring">
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Recurring Assignments
                   </Link>
                 </Button>
                 <Button asChild className="justify-start" variant="outline">
@@ -1722,86 +1980,41 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </Drawer>
 
               <Drawer
-                title="Bulk schedule"
-                description="Generate repeating shifts across a date range."
-                initialOpen={openBulkCreate}
+                title="Standard schedule"
+                description="Apply the recurring weekly pattern for the next 5 years, or clear future shifts before changing it."
+                initialOpen={openStandardSchedule}
                 trigger={
                   <Button variant="outline">
                     <CalendarDays className="mr-1 h-4 w-4" />
-                    Bulk Schedule
+                    Standard Schedule
                   </Button>
                 }
               >
-                <form action={createBulkScheduleAction} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label htmlFor="bulk-assignedUserId" className="text-sm font-medium">Assign to</label>
-                    <select
-                      id="bulk-assignedUserId"
-                      name="assignedUserId"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      defaultValue=""
-                    >
-                      <option value="">Unassigned</option>
-                      {schedulableStaffRows.map((staff) => (
-                        <option key={staff.id} value={staff.id}>
-                          {staff.name} ({staff.role})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label htmlFor="bulk-startDate" className="text-sm font-medium">Start date</label>
-                    <DatePickerField id="bulk-startDate" name="startDate" required />
-                  </div>
-                  <BulkRangeFields />
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label htmlFor="bulk-startTime" className="text-sm font-medium">Start</label>
-                      <TimePickerField id="bulk-startTime" name="startTime" defaultValue="09:00" max="19:59" required />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label htmlFor="bulk-endTime" className="text-sm font-medium">End</label>
-                      <TimePickerField id="bulk-endTime" name="endTime" defaultValue="17:00" max="20:00" required />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Repeat on</label>
-                    <div className="flex flex-wrap gap-2">
-                      {WEEKDAY_OPTIONS.map((day) => (
-                        <label key={day.value} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm bg-card">
-                          <input type="checkbox" name="daysOfWeek" value={day.value} className="h-4 w-4" />
-                          <span>{day.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label htmlFor="bulk-notes" className="text-sm font-medium">Notes <span className="text-muted-foreground font-normal">(optional)</span></label>
-                    <textarea
-                      id="bulk-notes"
-                      name="notes"
-                      rows={3}
-                      className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      placeholder="Optional notes for all generated shifts..."
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label htmlFor="bulk-status" className="text-sm font-medium">Status</label>
-                    <select
-                      id="bulk-status"
-                      name="status"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      defaultValue="published"
-                    >
-                      <option value="published">Published</option>
-                      <option value="draft">Draft</option>
-                    </select>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Max range 93 days. Shifts must end by 8:00 PM.</p>
-                  <div className="flex justify-end pt-2">
-                    <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">Create Schedule</Button>
-                  </div>
-                </form>
+                <StandardScheduleForm
+                  staffOptions={schedulableStaffRows}
+                  todayIso={todayIso}
+                  applyAction={applyStandardScheduleAction}
+                  clearAction={clearFutureShiftsAction}
+                />
+              </Drawer>
+
+              <Drawer
+                title="Recurring assignments"
+                description="Set who works a weekly slot in perpetuity, or remove them."
+                initialOpen={openRecurringAssignments}
+                trigger={
+                  <Button variant="outline">
+                    <UserPlus className="mr-1 h-4 w-4" />
+                    Recurring Assignments
+                  </Button>
+                }
+              >
+                <RecurringAssignmentsForm
+                  staffOptions={schedulableStaffRows}
+                  todayIso={todayIso}
+                  assignAction={assignRecurringAction}
+                  unassignAction={unassignRecurringAction}
+                />
               </Drawer>
             </div>
           </div>

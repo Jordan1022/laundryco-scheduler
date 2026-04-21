@@ -38,14 +38,17 @@ const ERROR_MESSAGES: Record<string, string> = {
   'edit-after-hours': 'Store closes at 8:00 PM. Shifts must end by 8:00 PM.',
   'invalid-shift': 'Shift not found or no longer editable.',
   'invalid-assignee': 'The selected assignee does not exist.',
-  'bulk-missing-fields': 'Start date, start time, and end time are required.',
-  'bulk-no-days-selected': 'Select at least one weekday to schedule.',
-  'bulk-invalid-range': 'Date range is invalid. Set an end date on or after the start date.',
-  'bulk-range-too-large': 'Bulk range is too large. Keep it to 93 days or fewer.',
-  'bulk-invalid-time': 'End time must be after start time.',
-  'bulk-after-hours': 'Store closes at 8:00 PM. Shifts must end by 8:00 PM.',
-  'bulk-invalid-assignee': 'The selected staff member does not exist or is inactive.',
-  'bulk-no-matching-days': 'No shifts matched the selected weekdays inside that range.',
+  'standard-missing-fields': 'Start date and every shift time are required.',
+  'standard-invalid-time': 'Each shift’s end time must be after its start time.',
+  'standard-after-hours': 'Store closes at 8:00 PM. All shifts must end by 8:00 PM.',
+  'standard-invalid-assignee': 'The selected staff member does not exist or is inactive.',
+  'standard-no-shifts': 'No shifts were generated. Check the times and try again.',
+  'clear-missing-date': 'Pick a date to clear from.',
+  'recurring-missing-fields': 'Pick a person, at least one day, a time block, and a start date.',
+  'recurring-no-days': 'Pick at least one day of the week.',
+  'recurring-invalid-time': 'End time must be after start time.',
+  'recurring-after-hours': 'Store closes at 8:00 PM. Shift end must be 8:00 PM or earlier.',
+  'recurring-invalid-user': 'The selected staff member does not exist or is inactive.',
   'invalid-review': 'Invalid review action submitted.',
   'request-not-found': 'That time-off request is no longer pending.',
   'swap-not-found': 'That swap request is no longer pending.',
@@ -69,16 +72,61 @@ type AdminToastProps = {
   status?: string
   error?: string
   count?: number
+  replaced?: number
+  conflicts?: number
+  skipped?: number
   dismissHref: string
 }
 
-export default function AdminToast({ status, error, count, dismissHref }: AdminToastProps) {
+export default function AdminToast({ status, error, count, replaced, conflicts, skipped, dismissHref }: AdminToastProps) {
   let cfg: ToastConfig | null = null
 
   if (error && ERROR_MESSAGES[error]) {
     cfg = { tone: 'error', message: ERROR_MESSAGES[error] }
-  } else if (status === 'bulk-shifts-created') {
-    cfg = { tone: 'success', message: `Created ${count ?? 0} shifts.` }
+  } else if (status === 'standard-applied') {
+    const n = count ?? 0
+    const r = replaced ?? 0
+    const c = conflicts ?? 0
+    const parts: string[] = []
+    if (n > 0) parts.push(`${n} new shifts created`)
+    if (r > 0) parts.push(`${r} overlapping unassigned shifts replaced`)
+    const body = parts.length > 0
+      ? `Applied standard schedule: ${parts.join(', ')}.`
+      : 'No new shifts added — the schedule already covers this window.'
+    if (c > 0) {
+      cfg = {
+        tone: 'warning',
+        message: `${body} ${c} unassigned shift${c === 1 ? '' : 's'} with different times will overlap — tick “Replace overlapping unassigned shifts” and Apply again, or use Clear to remove them.`,
+      }
+    } else if (n === 0 && r === 0) {
+      cfg = { tone: 'info', message: body }
+    } else {
+      cfg = { tone: 'success', message: body }
+    }
+  } else if (status === 'future-cleared') {
+    const n = count ?? 0
+    cfg = n === 0
+      ? { tone: 'info', message: 'No unassigned future shifts to clear.' }
+      : { tone: 'warning', message: `Cleared ${n} unassigned future shifts.` }
+  } else if (status === 'recurring-assigned') {
+    const n = count ?? 0
+    const s = skipped ?? 0
+    const body = n === 0
+      ? 'No unassigned matching shifts found.'
+      : `Assigned to ${n} recurring shift${n === 1 ? '' : 's'}.`
+    if (s > 0) {
+      cfg = {
+        tone: n === 0 ? 'info' : 'warning',
+        message: `${body} ${s} matching shift${s === 1 ? ' was' : 's were'} already assigned to someone else and ${s === 1 ? 'was' : 'were'} skipped.`,
+      }
+    } else {
+      cfg = { tone: n === 0 ? 'info' : 'success', message: body }
+    }
+  } else if (status === 'recurring-unassigned') {
+    const n = count ?? 0
+    cfg = n === 0
+      ? { tone: 'info', message: 'No matching recurring assignments to remove.' }
+      : { tone: 'warning', message: `Removed ${n} recurring assignment${n === 1 ? '' : 's'}.` }
   } else if (status && STATUS_MESSAGES[status]) {
     cfg = STATUS_MESSAGES[status]
   }
