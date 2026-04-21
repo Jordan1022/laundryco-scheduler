@@ -65,7 +65,7 @@ describe('ScheduleGridWithModal', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /16 1 shift 08:00.*12:00.*Alice/i }))
+    await user.click(screen.getByRole('button', { name: /16 1 shift Alice 08:00.*12:00/i }))
 
     expect(screen.getByRole('heading', { name: 'Thursday, April 16' })).toBeInTheDocument()
     expect(screen.getAllByText(/Alice/).length).toBeGreaterThan(0)

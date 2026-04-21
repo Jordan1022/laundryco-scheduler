@@ -113,7 +113,7 @@ export default function ScheduleGridWithModal({
                             : 'border-ink/20 bg-bleach',
                       )}
                     >
-                      <p className={cn('text-sm font-medium', shift.isMine && 'text-paper')}>
+                      <p className={cn('text-sm font-bold', shift.isMine && 'text-paper')}>
                         {shift.isOpen ? (
                           <span className="text-cherry">Open · needs staff</span>
                         ) : (
@@ -182,7 +182,7 @@ export default function ScheduleGridWithModal({
                             : 'border-ink/20 bg-bleach text-ink',
                       )}
                     >
-                      <p className="truncate font-medium">
+                      <p className="truncate font-bold">
                         {shift.isOpen ? 'Open' : shift.assigneeLabel}
                       </p>
                       <p className="font-mono tabular">
@@ -241,7 +241,7 @@ export default function ScheduleGridWithModal({
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <p className={cn('text-sm font-medium', shift.isMine && 'text-paper')}>
+                        <p className={cn('text-base font-bold', shift.isMine && 'text-paper')}>
                           {shift.isOpen ? (
                             <span className="text-cherry">Open · needs staff</span>
                           ) : (
