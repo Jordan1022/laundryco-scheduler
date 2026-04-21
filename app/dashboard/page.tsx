@@ -717,7 +717,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <span className="stamp text-ink/60">Your schedule</span>
               <p className="mt-1 font-serif text-2xl text-ink">{viewTitle}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="flex overflow-hidden rounded-sm border border-ink/25">
                 <Link
                   href={buildDashboardLink('week', anchorDate)}
@@ -783,12 +783,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
 
         <section id="notifications" className="mb-10">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <span className="stamp text-ink/60">Notices</span>
               <p className="mt-1 font-serif text-2xl text-ink">The bulletin board</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {unreadNotificationsCount > 0 ? (
                 <Stamp tone="cherry">{unreadNotificationsCount} unread</Stamp>
               ) : (
@@ -976,7 +976,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
 
         <section className="mb-10">
-          <div className="mb-3 flex items-end justify-between">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
             <div>
               <span className="stamp text-ink/60">Next seven days</span>
               <p className="mt-1 font-serif text-2xl text-ink">Your tear-off calendar</p>
