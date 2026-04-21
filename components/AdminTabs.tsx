@@ -61,6 +61,6 @@ export default function AdminTabs({ active, tabs }: AdminTabsProps) {
 }
 
 export function resolveAdminTab(value: string | undefined): AdminTabId {
-  if (value === 'shifts' || value === 'requests' || value === 'staff') return value
-  return 'overview'
+  if (value === 'overview' || value === 'requests' || value === 'staff') return value
+  return 'shifts'
 }
