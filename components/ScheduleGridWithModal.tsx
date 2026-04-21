@@ -13,6 +13,9 @@ type DayShift = {
   startLabel: string
   endLabel: string
   dateTimeLabel: string
+  assigneeLabel: string
+  isMine: boolean
+  isOpen: boolean
 }
 
 type DayEntry = {
@@ -96,12 +99,30 @@ export default function ScheduleGridWithModal({
               </div>
               <div className="mt-3 space-y-2">
                 {day.visibleShifts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Tap to review this day and add details.</p>
+                  <p className="text-sm text-muted-foreground">No shifts scheduled.</p>
                 ) : (
                   day.visibleShifts.map((shift) => (
-                    <div key={shift.shiftId} className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
-                      <p className="text-xs font-semibold text-blue-900">{shift.startLabel}-{shift.endLabel}</p>
-                      <p className="text-sm text-blue-900">{shift.title}</p>
+                    <div
+                      key={shift.shiftId}
+                      className={cn(
+                        'rounded-sm border px-3 py-2 transition-colors',
+                        shift.isOpen
+                          ? 'border-cherry/40 bg-cherry-soft'
+                          : shift.isMine
+                            ? 'border-ink bg-ink text-paper'
+                            : 'border-ink/20 bg-bleach',
+                      )}
+                    >
+                      <p className={cn('text-sm font-bold', shift.isMine && 'text-paper')}>
+                        {shift.isOpen ? (
+                          <span className="text-cherry">Open · needs staff</span>
+                        ) : (
+                          shift.assigneeLabel
+                        )}
+                      </p>
+                      <p className={cn('mt-0.5 font-mono text-xs tabular', shift.isMine ? 'text-paper/80' : 'text-ink/70')}>
+                        {shift.startLabel}–{shift.endLabel}
+                      </p>
                     </div>
                   ))
                 )}
@@ -150,11 +171,23 @@ export default function ScheduleGridWithModal({
                 </div>
                 <div className="mt-2 space-y-1">
                   {day.visibleShifts.map((shift) => (
-                    <div key={shift.shiftId} className="rounded bg-blue-50 border border-blue-100 px-1.5 py-1 text-[11px] leading-tight">
-                      <p className="font-medium text-blue-900">
-                        {shift.startLabel}-{shift.endLabel}
+                    <div
+                      key={shift.shiftId}
+                      className={cn(
+                        'rounded-sm border px-1.5 py-1 text-[11px] leading-tight',
+                        shift.isOpen
+                          ? 'border-cherry/40 bg-cherry-soft text-cherry'
+                          : shift.isMine
+                            ? 'border-ink bg-ink text-paper'
+                            : 'border-ink/20 bg-bleach text-ink',
+                      )}
+                    >
+                      <p className="truncate font-bold">
+                        {shift.isOpen ? 'Open' : shift.assigneeLabel}
                       </p>
-                      <p className="text-blue-800 truncate">{shift.title}</p>
+                      <p className="font-mono tabular">
+                        {shift.startLabel}–{shift.endLabel}
+                      </p>
                     </div>
                   ))}
                   {day.hiddenShiftCount > 0 ? (
@@ -195,12 +228,34 @@ export default function ScheduleGridWithModal({
                 </div>
               ) : (
                 activeDay.shifts.map((shift) => (
-                  <div key={shift.shiftId} className="rounded-md border p-3">
+                  <div
+                    key={shift.shiftId}
+                    className={cn(
+                      'rounded-sm border p-3',
+                      shift.isOpen
+                        ? 'border-cherry/40 bg-cherry-soft'
+                        : shift.isMine
+                          ? 'border-ink bg-ink/95 text-paper'
+                          : 'border-ink/20 bg-bleach',
+                    )}
+                  >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <p className="font-medium">{shift.title}</p>
-                        <p className="text-sm text-muted-foreground">{shift.dateTimeLabel}</p>
-                        {shift.location ? <p className="text-xs text-muted-foreground mt-1">{shift.location}</p> : null}
+                        <p className={cn('text-base font-bold', shift.isMine && 'text-paper')}>
+                          {shift.isOpen ? (
+                            <span className="text-cherry">Open · needs staff</span>
+                          ) : (
+                            shift.assigneeLabel + (shift.isMine ? ' (you)' : '')
+                          )}
+                        </p>
+                        <p className={cn('mt-1 font-mono text-sm tabular', shift.isMine ? 'text-paper/80' : 'text-ink-muted')}>
+                          {shift.startLabel} – {shift.endLabel}
+                        </p>
+                        {shift.location ? (
+                          <p className={cn('mt-1 text-xs', shift.isMine ? 'text-paper/70' : 'text-ink-muted')}>
+                            {shift.location}
+                          </p>
+                        ) : null}
                       </div>
                       {canManageStaff ? (
                         <Button asChild size="sm" variant="outline">
@@ -230,7 +285,7 @@ export default function ScheduleGridWithModal({
                     <TimePickerField
                       id="calendar-shift-start"
                       name="startTime"
-                      defaultValue="09:00"
+                      defaultValue="16:00"
                       max="19:59"
                       required
                     />
@@ -240,7 +295,7 @@ export default function ScheduleGridWithModal({
                     <TimePickerField
                       id="calendar-shift-end"
                       name="endTime"
-                      defaultValue="17:00"
+                      defaultValue="20:00"
                       max="20:00"
                       required
                     />

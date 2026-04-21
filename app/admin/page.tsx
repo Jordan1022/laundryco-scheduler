@@ -12,6 +12,9 @@ import TempPasswordField from '@/components/TempPasswordField'
 import StandardScheduleForm from '@/components/StandardScheduleForm'
 import RecurringAssignmentsForm from '@/components/RecurringAssignmentsForm'
 import ConfirmSubmitButton from '@/components/ConfirmSubmitButton'
+import { Brandmark } from '@/components/ui/Brandmark'
+import { TicketCard, Stamp } from '@/components/ui/TicketCard'
+import { Masthead } from '@/components/ui/Masthead'
 import AdminTabs, { resolveAdminTab } from '@/components/AdminTabs'
 import AdminToast from '@/components/AdminToast'
 import { Drawer } from '@/components/ui/drawer'
@@ -34,6 +37,8 @@ const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'n
 const CLOSING_TIME_MINUTES = 20 * 60 // 8:00 PM
 const ACTIVE_ROLES = ['employee', 'manager', 'admin'] as const
 const DB_INSERT_CHUNK = 500
+// Users whose hours are excluded from "Week hours" totals (salaried, not hourly).
+const SALARIED_EMAILS = new Set(['joy@laundryco.store'])
 
 type ActiveRole = typeof ACTIVE_ROLES[number]
 
@@ -694,7 +699,67 @@ async function updateShiftAction(formData: FormData) {
     })))
   }
 
-  redirect('/admin?status=shift-updated#upcoming-shifts')
+  let recurringAssignedCount = 0
+  const makeRecurring = formData.get('makeRecurring') === 'on'
+  if (makeRecurring && assignedUserId && status !== 'cancelled') {
+    const dayOfWeek = startDateTime.getDay()
+    const blockStartMin = startDateTime.getHours() * 60 + startDateTime.getMinutes()
+    const blockEndMin = endDateTime.getHours() * 60 + endDateTime.getMinutes()
+
+    const candidates = await db.select({
+      id: shifts.id,
+      startTime: shifts.startTime,
+      endTime: shifts.endTime,
+    })
+      .from(shifts)
+      .where(and(
+        gte(shifts.startTime, startDateTime),
+        ne(shifts.status, 'cancelled'),
+        ne(shifts.id, shiftId),
+      ))
+
+    const matching = candidates.filter((row) => {
+      if (row.startTime.getDay() !== dayOfWeek) return false
+      const s = row.startTime.getHours() * 60 + row.startTime.getMinutes()
+      const e = row.endTime.getHours() * 60 + row.endTime.getMinutes()
+      return s === blockStartMin && e === blockEndMin
+    })
+
+    if (matching.length > 0) {
+      const matchingIds = matching.map((s) => s.id)
+      const alreadyAssigned = new Set<string>()
+      for (let i = 0; i < matchingIds.length; i += DB_INSERT_CHUNK) {
+        const chunk = matchingIds.slice(i, i + DB_INSERT_CHUNK)
+        const rows = await db.select({ shiftId: assignments.shiftId })
+          .from(assignments)
+          .where(inArray(assignments.shiftId, chunk))
+        for (const row of rows) alreadyAssigned.add(row.shiftId)
+      }
+      const toAssignIds = matchingIds.filter((id) => !alreadyAssigned.has(id))
+      if (toAssignIds.length > 0) {
+        const values = toAssignIds.map((targetShiftId) => ({
+          shiftId: targetShiftId,
+          userId: assignedUserId,
+          status: 'assigned' as const,
+        }))
+        for (let i = 0; i < values.length; i += DB_INSERT_CHUNK) {
+          await db.insert(assignments).values(values.slice(i, i + DB_INSERT_CHUNK))
+        }
+        recurringAssignedCount = toAssignIds.length
+
+        if (status !== 'draft') {
+          await notifyUsers([{
+            userId: assignedUserId,
+            title: 'Recurring shifts assigned',
+            body: `You are now assigned to ${recurringAssignedCount} future recurring shift${recurringAssignedCount === 1 ? '' : 's'}.`,
+            link: '/dashboard',
+          }])
+        }
+      }
+    }
+  }
+
+  redirect(`/admin?status=shift-updated&recurringAssigned=${recurringAssignedCount}#upcoming-shifts`)
 }
 
 async function setShiftCancelledAction(formData: FormData) {
@@ -1284,6 +1349,7 @@ type AdminPageProps = {
     replaced?: string | string[]
     conflicts?: string | string[]
     skipped?: string | string[]
+    recurringAssigned?: string | string[]
     openShiftId?: string | string[]
     openStaffId?: string | string[]
     tab?: string | string[]
@@ -1349,6 +1415,19 @@ function ShiftEditDrawer({
               </option>
             ))}
           </select>
+          <label className="mt-2 flex items-start gap-2 rounded-sm border border-dashed border-ink/30 p-3 text-sm">
+            <input
+              type="checkbox"
+              name="makeRecurring"
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              <span className="font-medium text-ink">Make this recurring</span>
+              <span className="block text-xs text-muted-foreground">
+                Also attach this person to every future shift that matches this weekday + time. Shifts already assigned to someone else are left alone.
+              </span>
+            </span>
+          </label>
         </div>
         <div className="space-y-1.5">
           <label htmlFor={`shift-date-${shift.id}`} className="text-sm font-medium">Date</label>
@@ -1587,6 +1666,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const replacedCount = parseNonNegativeInt(getQueryValue(searchParams?.replaced))
   const conflictsCount = parseNonNegativeInt(getQueryValue(searchParams?.conflicts))
   const skippedCount = parseNonNegativeInt(getQueryValue(searchParams?.skipped))
+  const recurringAssignedCount = parseNonNegativeInt(getQueryValue(searchParams?.recurringAssigned))
 
   const [staffRows, upcomingShiftBaseRows, weekShiftRows, pendingTimeOffRows, pendingSwapRows] = await Promise.all([
     db.select({
@@ -1720,10 +1800,24 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     if (shift.status === 'cancelled') return false
     return (assignedCountByShift.get(shift.id) ?? 0) === 0
   })
+  const salariedUserIds = new Set(
+    staffRows
+      .filter((staff) => SALARIED_EMAILS.has(staff.email.toLowerCase()))
+      .map((staff) => staff.id),
+  )
+  const payableAssignedCountByShift = new Map<string, number>()
+  for (const row of assignmentRows) {
+    if (row.status !== 'assigned') continue
+    if (salariedUserIds.has(row.userId)) continue
+    payableAssignedCountByShift.set(
+      row.shiftId,
+      (payableAssignedCountByShift.get(row.shiftId) ?? 0) + 1,
+    )
+  }
   const weekHours = weekShiftRows.reduce((total, shift) => {
     if (shift.status === 'cancelled') return total
     const durationHours = Math.max(0, (shift.endTime.getTime() - shift.startTime.getTime()) / (1000 * 60 * 60))
-    const assignedCount = assignedCountByShift.get(shift.id) ?? 0
+    const assignedCount = payableAssignedCountByShift.get(shift.id) ?? 0
     return total + (durationHours * assignedCount)
   }, 0)
 
@@ -1760,60 +1854,87 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const todayIso = formatDateInput(new Date())
   const openStaffEditId = getQueryValue(searchParams?.openStaffId) ?? ''
 
+  const todayLong = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(now)
+  const triagePriority: 'approvals' | 'coverage' | 'clear' =
+    pendingRequestsCount > 0 ? 'approvals' : unfilledUpcomingShifts.length > 0 ? 'coverage' : 'clear'
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="bg-card border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-full bg-[#1e3a8a] flex items-center justify-center">
-              <span className="text-white font-bold">LC</span>
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Scheduler Admin</h1>
-              <p className="text-sm text-muted-foreground">
-                Running operations for {session.user.name}. Review requests first, then adjust staffing and publish shifts.
-              </p>
-            </div>
-          </div>
-          <div className="w-full md:w-auto flex flex-wrap items-center justify-end gap-2">
-            <Button asChild variant="outline">
-              <Link href="/dashboard">Team View</Link>
+    <div className="relative min-h-screen">
+      <header className="relative border-b border-ink/15 bg-paper/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+          <Brandmark size="md" withWordmark subtitle="Admin office" />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/dashboard">← Team view</Link>
             </Button>
             <SignOutButton />
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-xs font-medium text-muted-foreground">Pending Requests</p>
-              <p className="mt-1 text-2xl font-bold">{pendingRequestsCount}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Time off and swaps</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-xs font-medium text-muted-foreground">Unfilled Shifts</p>
-              <p className="mt-1 text-2xl font-bold">{unfilledUpcomingShifts.length}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Next {upcomingShiftRows.length} shifts</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-xs font-medium text-muted-foreground">Team Members</p>
-              <p className="mt-1 text-2xl font-bold">{activeStaff.length}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Schedulable users</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-xs font-medium text-muted-foreground">Hours This Week</p>
-              <p className="mt-1 text-2xl font-bold">{formatHours(weekHours)}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Assigned only</p>
-            </CardContent>
-          </Card>
+      <main className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+        <Masthead
+          eyebrow={todayLong.toUpperCase()}
+          title="The front desk."
+          subtitle={`Running operations for ${session.user.name}. One thing at a time — start with what needs attention.`}
+          className="mb-8 animate-reveal-up"
+        >
+          <TicketCard tone={triagePriority === 'clear' ? 'sage' : triagePriority === 'approvals' ? 'cherry' : 'bleach'} className="w-full min-w-[280px] p-5 lg:w-80 animate-stamp-in">
+            {triagePriority === 'approvals' ? (
+              <>
+                <span className="stamp opacity-80">What needs you</span>
+                <p className="mt-1 font-serif text-3xl leading-none">
+                  {pendingRequestsCount} pending
+                </p>
+                <p className="mt-1 text-xs opacity-80">Time-off &amp; swap requests — clear these first.</p>
+                <Button asChild size="sm" variant="outline" className="mt-3 border-paper/40 text-paper hover:bg-paper/10">
+                  <Link href="/admin?tab=requests">Open requests →</Link>
+                </Button>
+              </>
+            ) : triagePriority === 'coverage' ? (
+              <>
+                <span className="stamp text-ink/60">What needs you</span>
+                <p className="mt-1 font-serif text-3xl leading-none text-ink">
+                  {unfilledUpcomingShifts.length} unfilled
+                </p>
+                <p className="mt-1 text-xs text-ink-muted">Upcoming shifts without an assignee.</p>
+                <Button asChild size="sm" className="mt-3">
+                  <Link href="/admin?tab=shifts">Fill coverage →</Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                <span className="stamp opacity-80">All caught up</span>
+                <p className="mt-1 font-serif text-3xl leading-none">Nothing pending</p>
+                <p className="mt-1 text-xs opacity-80">Have a cup of tea. Check back later.</p>
+              </>
+            )}
+          </TicketCard>
+        </Masthead>
+
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <TicketCard tone="bleach" className="p-4">
+            <span className="stamp text-ink/60">Week hours</span>
+            <p className="mt-1 font-serif text-3xl leading-none text-ink tabular">{formatHours(weekHours)}</p>
+            <p className="stamp mt-2 text-ink/50">Hourly staff</p>
+          </TicketCard>
+          <TicketCard tone="bleach" className="p-4">
+            <span className="stamp text-ink/60">Unfilled</span>
+            <p className={cn('mt-1 font-serif text-3xl leading-none', unfilledUpcomingShifts.length > 0 ? 'text-cherry' : 'text-ink')}>
+              {unfilledUpcomingShifts.length}
+            </p>
+            <p className="stamp mt-2 text-ink/50">Next {upcomingShiftRows.length}</p>
+          </TicketCard>
+          <TicketCard tone="bleach" className="p-4">
+            <span className="stamp text-ink/60">Pending</span>
+            <p className="mt-1 font-serif text-3xl leading-none text-ink">{pendingRequestsCount}</p>
+            <p className="stamp mt-2 text-ink/50">Requests</p>
+          </TicketCard>
+          <TicketCard tone="bleach" className="p-4">
+            <span className="stamp text-ink/60">Team</span>
+            <p className="mt-1 font-serif text-3xl leading-none text-ink">{activeStaff.length}</p>
+            <p className="stamp mt-2 text-ink/50">On payroll</p>
+          </TicketCard>
         </div>
 
         <AdminTabs active={activeTab} tabs={adminTabs} />
@@ -1825,87 +1946,112 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           replaced={replacedCount}
           conflicts={conflictsCount}
           skipped={skippedCount}
+          recurringAssigned={recurringAssignedCount}
           dismissHref={`/admin${tabQuery}`}
         />
 
         {activeTab === 'overview' ? (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Start here</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border bg-card p-3">
-                  <p className="text-sm font-semibold">1. Clear approvals</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Time-off and swap requests before changing staffing.</p>
+          <div className="mt-6 space-y-8">
+            <section>
+              <div className="mb-3 flex items-end justify-between">
+                <div>
+                  <span className="stamp text-ink/60">Protocol</span>
+                  <p className="mt-1 font-serif text-2xl text-ink">Order of the day</p>
                 </div>
-                <div className="rounded-lg border bg-card p-3">
-                  <p className="text-sm font-semibold">2. Fill open coverage</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Use shifts and the standard schedule to close gaps.</p>
-                </div>
-                <div className="rounded-lg border bg-card p-3">
-                  <p className="text-sm font-semibold">3. Publish with confidence</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Publish once coverage looks right so staff gets one clear update.</p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                {[
+                  { n: '01', t: 'Clear approvals', d: 'Time-off and swap requests before changing staffing.' },
+                  { n: '02', t: 'Fill open coverage', d: 'Use shifts and the standard schedule to close gaps.' },
+                  { n: '03', t: 'Publish with confidence', d: 'Publish once coverage looks right so staff gets one clear update.' },
+                ].map((step) => (
+                  <TicketCard key={step.n} tone="bleach" className="relative p-5">
+                    <span className="font-mono text-xs tracking-widest text-ink/40">{step.n}</span>
+                    <p className="mt-2 font-serif text-xl text-ink">{step.t}</p>
+                    <p className="mt-2 text-sm text-ink-muted">{step.d}</p>
+                  </TicketCard>
+                ))}
+              </div>
+            </section>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Quick actions</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <Button asChild className="justify-start bg-[#1e3a8a] hover:bg-[#172b6d]">
+            <section>
+              <div className="mb-3 flex items-end justify-between">
+                <div>
+                  <span className="stamp text-ink/60">Tools</span>
+                  <p className="mt-1 font-serif text-2xl text-ink">Quick actions</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <Button asChild className="h-auto justify-start p-4 text-left">
                   <Link href="/admin?tab=shifts&create=shift">
-                    <CalendarPlus className="mr-2 h-4 w-4" />
-                    New Shift
+                    <CalendarPlus className="mr-3 h-5 w-5" />
+                    <span className="flex flex-col items-start leading-tight">
+                      <span className="stamp text-paper/70">Add one</span>
+                      <span className="mt-0.5 font-serif text-lg">New shift</span>
+                    </span>
                   </Link>
                 </Button>
-                <Button asChild className="justify-start" variant="outline">
+                <Button asChild variant="outline" className="h-auto justify-start p-4 text-left">
                   <Link href="/admin?tab=shifts&create=standard">
-                    <CalendarDays className="mr-2 h-4 w-4" />
-                    Standard Schedule
+                    <CalendarDays className="mr-3 h-5 w-5" />
+                    <span className="flex flex-col items-start leading-tight">
+                      <span className="stamp text-ink/60">Set &amp; forget</span>
+                      <span className="mt-0.5 font-serif text-lg">Standard schedule</span>
+                    </span>
                   </Link>
                 </Button>
-                <Button asChild className="justify-start" variant="outline">
+                <Button asChild variant="outline" className="h-auto justify-start p-4 text-left">
                   <Link href="/admin?tab=shifts&create=recurring">
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Recurring Assignments
+                    <UserPlus className="mr-3 h-5 w-5" />
+                    <span className="flex flex-col items-start leading-tight">
+                      <span className="stamp text-ink/60">Who works when</span>
+                      <span className="mt-0.5 font-serif text-lg">Recurring assignments</span>
+                    </span>
                   </Link>
                 </Button>
-                <Button asChild className="justify-start" variant="outline">
+                <Button asChild variant="outline" className="h-auto justify-start p-4 text-left">
                   <Link href="/admin?tab=staff&create=staff">
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Add Staff
+                    <UserPlus className="mr-3 h-5 w-5" />
+                    <span className="flex flex-col items-start leading-tight">
+                      <span className="stamp text-ink/60">Add to roster</span>
+                      <span className="mt-0.5 font-serif text-lg">New staff</span>
+                    </span>
                   </Link>
                 </Button>
-                <Button asChild className="justify-start" variant="outline">
+                <Button asChild variant="outline" className="h-auto justify-start p-4 text-left">
                   <Link href="/admin?tab=requests">
-                    <CheckSquare className="mr-2 h-4 w-4" />
-                    Review Requests
+                    <CheckSquare className="mr-3 h-5 w-5" />
+                    <span className="flex flex-col items-start leading-tight">
+                      <span className="stamp text-ink/60">Review inbox</span>
+                      <span className="mt-0.5 font-serif text-lg">Requests</span>
+                    </span>
                   </Link>
                 </Button>
-                <form action={publishScheduleAction} className="sm:col-span-2 lg:col-span-4">
+                <form action={publishScheduleAction}>
                   <ConfirmSubmitButton
                     type="submit"
-                    className="justify-start w-full"
                     variant="outline"
+                    className="h-auto w-full justify-start p-4 text-left"
                     confirmMessage="Publish all future draft shifts now? Assigned employees will be notified immediately."
                   >
-                    <CalendarDays className="mr-2 h-4 w-4" />
-                    Publish All Drafts
+                    <CalendarDays className="mr-3 h-5 w-5" />
+                    <span className="flex flex-col items-start leading-tight">
+                      <span className="stamp text-ink/60">Go live</span>
+                      <span className="mt-0.5 font-serif text-lg">Publish drafts</span>
+                    </span>
                   </ConfirmSubmitButton>
                 </form>
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           </div>
         ) : null}
 
         {activeTab === 'shifts' ? (
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">Upcoming shifts</h2>
-              <p className="text-sm text-muted-foreground">Tap a row to edit or reassign. Shifts default to {DEFAULT_SHIFT_TITLE} at {DEFAULT_SHIFT_LOCATION}.</p>
+              <span className="stamp text-ink/60">Shifts ledger</span>
+              <p className="mt-1 font-serif text-2xl text-ink">Upcoming tickets</p>
+              <p className="mt-1 text-sm text-ink-muted">Tap a ticket to edit, reassign, or cancel.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Drawer
@@ -1943,11 +2089,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label htmlFor="startTime" className="text-sm font-medium">Start</label>
-                      <TimePickerField id="startTime" name="startTime" defaultValue="09:00" max="19:59" required />
+                      <TimePickerField id="startTime" name="startTime" defaultValue="16:00" max="19:59" required />
                     </div>
                     <div className="space-y-1.5">
                       <label htmlFor="endTime" className="text-sm font-medium">End</label>
-                      <TimePickerField id="endTime" name="endTime" defaultValue="17:00" max="20:00" required />
+                      <TimePickerField id="endTime" name="endTime" defaultValue="20:00" max="20:00" required />
                     </div>
                   </div>
                   <div className="space-y-1.5">
@@ -2021,135 +2167,107 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         ) : null}
 
         {activeTab === 'shifts' ? (
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            <Card className="xl:col-span-2">
-              <CardContent className="p-0">
-                {upcomingShiftRows.length === 0 ? (
-                  <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
-                    No upcoming shifts yet.
-                  </div>
-                ) : (
-                  <>
-                    <div className="hidden md:block">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            <th className="px-4 py-2">Date</th>
-                            <th className="px-4 py-2">Time</th>
-                            <th className="px-4 py-2">Assignee</th>
-                            <th className="px-4 py-2">Status</th>
-                            <th className="px-4 py-2"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {upcomingShiftRows.map((shift) => {
-                            const assignedCount = assignedCountByShift.get(shift.id) ?? 0
-                            const isOpen = assignedCount === 0 && shift.status !== 'cancelled'
-                            const assignedUserId = assignedUserIdByShift.get(shift.id) ?? ''
-                            const assignedUserName = assignedUserId ? userNameMap.get(assignedUserId) : undefined
-                            return (
-                              <tr key={shift.id} className="border-b last:border-b-0 align-middle">
-                                <td className="px-4 py-3 font-medium whitespace-nowrap">{dateLabel.format(shift.startTime)}</td>
-                                <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                                  {timeLabel.format(shift.startTime)} – {timeLabel.format(shift.endTime)}
-                                </td>
-                                <td className="px-4 py-3">
-                                  {assignedUserName ? (
-                                    <span>{assignedUserName}</span>
-                                  ) : (
-                                    <span className="text-muted-foreground">—</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3">
-                                  <div className="flex flex-wrap items-center gap-1">
-                                    <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', shiftStatusPill(shift.status))}>
-                                      {shift.status ?? 'unknown'}
-                                    </span>
-                                    {isOpen ? (
-                                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">Open</span>
-                                    ) : null}
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3 text-right">
-                                  <ShiftEditDrawer
-                                    shift={shift}
-                                    assignedUserId={assignedUserId}
-                                    staff={schedulableStaffRows}
-                                    initialOpen={openShiftId === shift.id}
-                                  />
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="md:hidden divide-y">
-                      {upcomingShiftRows.map((shift) => {
-                        const assignedCount = assignedCountByShift.get(shift.id) ?? 0
-                        const isOpen = assignedCount === 0 && shift.status !== 'cancelled'
-                        const assignedUserId = assignedUserIdByShift.get(shift.id) ?? ''
-                        const assignedUserName = assignedUserId ? userNameMap.get(assignedUserId) : undefined
-                        return (
-                          <div key={shift.id} className="p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="font-medium">{dateLabel.format(shift.startTime)}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {timeLabel.format(shift.startTime)} – {timeLabel.format(shift.endTime)}
-                                </p>
-                                <p className="mt-1 text-sm truncate">
-                                  {assignedUserName ?? <span className="text-muted-foreground">Unassigned</span>}
-                                </p>
-                              </div>
-                              <div className="flex flex-col items-end gap-1 shrink-0">
-                                <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', shiftStatusPill(shift.status))}>
-                                  {shift.status ?? 'unknown'}
-                                </span>
-                                {isOpen ? (
-                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">Open</span>
-                                ) : null}
-                              </div>
-                            </div>
-                            <div className="mt-3 flex justify-end">
-                              <ShiftEditDrawer
-                                shift={shift}
-                                assignedUserId={assignedUserId}
-                                staff={schedulableStaffRows}
-                                initialOpen={openShiftId === shift.id}
-                              />
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+          <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
+            <div className="space-y-3 xl:col-span-2">
+              {upcomingShiftRows.length === 0 ? (
+                <TicketCard tone="bleach" className="p-10 text-center">
+                  <Stamp tone="muted">No tickets</Stamp>
+                  <p className="mt-3 font-serif text-xl text-ink">No upcoming shifts yet.</p>
+                  <p className="mt-1 text-xs text-ink-muted">Use Standard Schedule or New Shift to start filling the week.</p>
+                </TicketCard>
+              ) : (
+                upcomingShiftRows.map((shift) => {
+                  const assignedCount = assignedCountByShift.get(shift.id) ?? 0
+                  const isCancelled = shift.status === 'cancelled'
+                  const isDraft = shift.status === 'draft'
+                  const isOpen = assignedCount === 0 && !isCancelled
+                  const assignedUserId = assignedUserIdByShift.get(shift.id) ?? ''
+                  const assignedUserName = assignedUserId ? userNameMap.get(assignedUserId) : undefined
+                  const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(shift.startTime).toUpperCase()
+                  const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(shift.startTime).toUpperCase()
+                  const ticketNo = String(shift.id).slice(0, 6).toUpperCase()
+                  const primaryStatusTone: 'sage' | 'ochre' | 'cherry' | 'muted' = isCancelled
+                    ? 'cherry'
+                    : isDraft
+                      ? 'ochre'
+                      : isOpen
+                        ? 'cherry'
+                        : 'sage'
+                  const primaryStatusLabel = isCancelled
+                    ? 'Cancelled'
+                    : isDraft
+                      ? 'Draft'
+                      : isOpen
+                        ? 'Open · needs staff'
+                        : 'Covered'
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Coverage by day</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {[...coverageByDay.values()].length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No active shifts in this range.</p>
-                ) : (
-                  [...coverageByDay.values()].map((day) => (
-                    <div key={day.label} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
-                      <div>
-                        <p className="font-medium">{day.label}</p>
-                        <p className="text-xs text-muted-foreground">{day.total} shifts</p>
+                  return (
+                    <TicketCard key={shift.id} tone="bleach" className="overflow-hidden p-0">
+                      <div className="flex flex-col sm:flex-row">
+                        <div className="flex w-full items-center justify-between border-b border-dashed border-ink/25 bg-paper/60 px-5 py-3 sm:w-28 sm:flex-col sm:items-start sm:justify-center sm:border-b-0 sm:border-r sm:py-5">
+                          <div>
+                            <span className="stamp text-ink/60">{month}</span>
+                            <p className="font-serif text-4xl leading-none text-ink">{shift.startTime.getDate()}</p>
+                            <span className="stamp mt-1 inline-block text-ink/50">{weekday}</span>
+                          </div>
+                          <span className="stamp text-ink/40 sm:mt-auto sm:pt-4">№ {ticketNo}</span>
+                        </div>
+                        <div className="flex-1 px-5 py-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-mono text-xl tabular text-ink">
+                                {timeLabel.format(shift.startTime)} – {timeLabel.format(shift.endTime)}
+                              </p>
+                              <p className="mt-1 text-sm text-ink-muted">
+                                {assignedUserName ?? <span className="italic">Awaiting assignee</span>}
+                                <span className="px-2 text-ink/30">·</span>
+                                {shift.location ?? DEFAULT_SHIFT_LOCATION}
+                              </p>
+                            </div>
+                            <Stamp tone={primaryStatusTone}>{primaryStatusLabel}</Stamp>
+                          </div>
+                          <div className="mt-4 flex items-center justify-between border-t border-dashed border-ink/15 pt-3">
+                            <span className="stamp text-ink/50">Laundry Co. · {DEFAULT_SHIFT_TITLE}</span>
+                            <ShiftEditDrawer
+                              shift={shift}
+                              assignedUserId={assignedUserId}
+                              staff={schedulableStaffRows}
+                              initialOpen={openShiftId === shift.id}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', day.open > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800')}>
-                        {day.open > 0 ? `${day.open} open` : 'Fully staffed'}
-                      </span>
-                    </div>
-                  ))
+                    </TicketCard>
+                  )
+                })
+              )}
+            </div>
+
+            <div>
+              <div className="mb-3">
+                <span className="stamp text-ink/60">This week</span>
+                <p className="mt-1 font-serif text-2xl text-ink">Coverage</p>
+              </div>
+              <TicketCard tone="bleach" className="p-4">
+                {[...coverageByDay.values()].length === 0 ? (
+                  <p className="text-sm text-ink-muted">No active shifts in this range.</p>
+                ) : (
+                  <ul className="divide-y divide-dashed divide-ink/15">
+                    {[...coverageByDay.values()].map((day) => (
+                      <li key={day.label} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                        <div>
+                          <p className="font-serif text-lg text-ink">{day.label}</p>
+                          <p className="stamp text-ink/50">{day.total} shift{day.total === 1 ? '' : 's'}</p>
+                        </div>
+                        <Stamp tone={day.open > 0 ? 'ochre' : 'sage'}>
+                          {day.open > 0 ? `${day.open} open` : 'Fully staffed'}
+                        </Stamp>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </CardContent>
-            </Card>
+              </TicketCard>
+            </div>
           </div>
         ) : null}
 

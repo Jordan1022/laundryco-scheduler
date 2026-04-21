@@ -6,8 +6,9 @@ import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { users } from '@/lib/schema'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Brandmark } from '@/components/ui/Brandmark'
+import { TicketCard } from '@/components/ui/TicketCard'
 
 type PasswordPageProps = {
   searchParams?: {
@@ -79,116 +80,94 @@ async function changePasswordAction(formData: FormData) {
   redirect('/auth/login?status=password-updated')
 }
 
+const ERROR_COPY: Record<string, string> = {
+  'missing-fields': 'Fill in current, new, and confirmation fields.',
+  'password-too-short': 'New password must be at least 8 characters.',
+  'password-mismatch': 'New password and confirmation don’t match.',
+  'current-password-invalid': 'Current password is incorrect.',
+  'password-unchanged': 'New password must differ from the current one.',
+  'account-not-ready': 'This account can’t update its password yet — ask a manager.',
+}
+
 export default async function PasswordPage({ searchParams }: PasswordPageProps) {
   await requireAuthenticatedSession()
 
   const formStatus = getQueryValue(searchParams?.status)
   const formError = getQueryValue(searchParams?.error)
+  const errorMessage = formError ? ERROR_COPY[formError] : null
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="bg-card border-b">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-[#1e3a8a] flex items-center justify-center">
-              <span className="text-white font-bold">LC</span>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">Change Password</h1>
-              <p className="text-sm text-muted-foreground">Update your account password securely.</p>
-            </div>
-          </div>
+    <div className="relative min-h-screen">
+      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <Brandmark size="md" withWordmark subtitle="Account · Change password" />
           <Button asChild variant="outline" size="sm">
-            <Link href="/dashboard">Back to Dashboard</Link>
+            <Link href="/dashboard">← Back to dashboard</Link>
           </Button>
-        </div>
-      </header>
+        </header>
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Password Settings</CardTitle>
-            <CardDescription>
-              Use at least 8 characters and do not reuse your current password.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {formStatus === 'password-updated' ? (
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-800">
-                Your password has been updated.
-              </div>
-            ) : null}
-            {formError === 'missing-fields' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                Current password, new password, and confirmation are required.
-              </div>
-            ) : null}
-            {formError === 'password-too-short' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                New password must be at least 8 characters.
-              </div>
-            ) : null}
-            {formError === 'password-mismatch' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                New password and confirmation do not match.
-              </div>
-            ) : null}
-            {formError === 'current-password-invalid' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                Current password is incorrect.
-              </div>
-            ) : null}
-            {formError === 'password-unchanged' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                New password must be different from your current password.
-              </div>
-            ) : null}
-            {formError === 'account-not-ready' ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                This account cannot update password yet. Contact your manager.
-              </div>
-            ) : null}
+        <TicketCard tone="bleach" className="p-8 animate-reveal-up">
+          <div className="mb-6 space-y-1 border-b border-dashed border-ink/20 pb-4">
+            <span className="stamp text-ink/60">Account security</span>
+            <h1 className="font-serif text-4xl leading-none text-ink">New password slip</h1>
+            <p className="mt-1 text-sm text-ink-muted">
+              Use at least 8 characters. Don’t reuse the current password.
+            </p>
+          </div>
 
-            <form action={changePasswordAction} className="space-y-3">
-              <div className="space-y-1">
-                <label htmlFor="currentPassword" className="text-sm font-medium">Current Password</label>
-                <Input
-                  id="currentPassword"
-                  name="currentPassword"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="newPassword" className="text-sm font-medium">New Password</label>
-                <Input
-                  id="newPassword"
-                  name="newPassword"
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="confirmPassword" className="text-sm font-medium">Confirm New Password</label>
-                <Input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full bg-[#1e3a8a] hover:bg-[#172b6d]">
-                Update Password
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </main>
+          {formStatus === 'password-updated' ? (
+            <div className="mb-4 rounded-sm border border-sage/40 bg-sage-soft px-3 py-2 text-xs text-sage">
+              Your password has been updated.
+            </div>
+          ) : null}
+          {errorMessage ? (
+            <div className="mb-4 rounded-sm border border-cherry/40 bg-cherry-soft px-3 py-2 text-xs text-cherry">
+              {errorMessage}
+            </div>
+          ) : null}
+
+          <form action={changePasswordAction} className="space-y-5">
+            <div className="space-y-1.5">
+              <label htmlFor="currentPassword" className="stamp text-ink/60">Current password</label>
+              <Input
+                id="currentPassword"
+                name="currentPassword"
+                type="password"
+                autoComplete="current-password"
+                required
+                className="h-11 rounded-sm border-ink/20 bg-paper/60 font-mono text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="newPassword" className="stamp text-ink/60">New password</label>
+              <Input
+                id="newPassword"
+                name="newPassword"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                required
+                className="h-11 rounded-sm border-ink/20 bg-paper/60 font-mono text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="confirmPassword" className="stamp text-ink/60">Confirm new password</label>
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                required
+                className="h-11 rounded-sm border-ink/20 bg-paper/60 font-mono text-sm"
+              />
+            </div>
+            <Button type="submit" className="h-11 w-full">
+              Stamp &amp; update
+            </Button>
+          </form>
+        </TicketCard>
+      </div>
     </div>
   )
 }

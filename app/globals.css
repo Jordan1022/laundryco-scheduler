@@ -6,65 +6,78 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Paper & ink palette */
+    --paper: 38 36% 94%;           /* cream */
+    --ink: 221 52% 14%;            /* deep navy */
+    --ink-dim: 221 40% 24%;        /* dimmer navy for hover */
+    --ink-muted: 221 12% 40%;      /* warm grey-navy for meta */
+    --bleach: 45 52% 98%;          /* off-white card */
+    --cherry: 4 62% 48%;           /* ticket-stamp red */
+    --cherry-soft: 4 70% 94%;      /* red tint background */
+    --sage: 95 16% 40%;            /* all-good green */
+    --sage-soft: 95 28% 92%;       /* green tint background */
+    --ochre: 36 66% 44%;           /* warning amber */
+    --ochre-soft: 36 80% 92%;
+    --rule: 34 18% 78%;            /* dashed rule line */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* shadcn compatibility tokens, remapped */
+    --background: var(--paper);
+    --foreground: var(--ink);
+    --card: var(--bleach);
+    --card-foreground: var(--ink);
+    --popover: var(--bleach);
+    --popover-foreground: var(--ink);
+    --primary: var(--ink);
+    --primary-foreground: var(--paper);
+    --secondary: 38 22% 88%;
+    --secondary-foreground: var(--ink);
+    --muted: 38 22% 88%;
+    --muted-foreground: var(--ink-muted);
+    --accent: var(--cherry);
+    --accent-foreground: var(--paper);
+    --destructive: var(--cherry);
+    --destructive-foreground: var(--paper);
+    --border: var(--rule);
+    --input: var(--rule);
+    --ring: var(--ink);
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-
-    --radius: 0.5rem;
+    --radius: 0.25rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Film-noir reverse: warm charcoal with cream ink */
+    --paper: 220 18% 9%;
+    --ink: 38 30% 90%;
+    --ink-dim: 38 22% 80%;
+    --ink-muted: 38 8% 65%;
+    --bleach: 220 16% 13%;
+    --cherry: 4 72% 58%;
+    --cherry-soft: 4 40% 22%;
+    --sage: 95 22% 62%;
+    --sage-soft: 95 18% 22%;
+    --ochre: 36 66% 60%;
+    --ochre-soft: 36 30% 22%;
+    --rule: 220 10% 28%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --background: var(--paper);
+    --foreground: var(--ink);
+    --card: var(--bleach);
+    --card-foreground: var(--ink);
+    --popover: var(--bleach);
+    --popover-foreground: var(--ink);
+    --primary: var(--ink);
+    --primary-foreground: var(--paper);
+    --secondary: 220 12% 18%;
+    --secondary-foreground: var(--ink);
+    --muted: 220 12% 18%;
+    --muted-foreground: var(--ink-muted);
+    --accent: var(--cherry);
+    --accent-foreground: var(--paper);
+    --destructive: var(--cherry);
+    --destructive-foreground: var(--paper);
+    --border: var(--rule);
+    --input: var(--rule);
+    --ring: var(--ink);
   }
 }
 
@@ -73,100 +86,118 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-paper text-ink;
+    font-feature-settings: "ss01", "cv11";
+  }
+  ::selection {
+    background-color: hsl(var(--cherry) / 0.2);
+    color: hsl(var(--ink));
+  }
+  h1, h2, h3, h4 {
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
   }
 }
 
 @layer utilities {
-  .dark .bg-white {
-    background-color: hsl(var(--card));
+  /* subtle paper grain over everything */
+  .paper-grain {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    opacity: 0.35;
+    mix-blend-mode: multiply;
+    background-image:
+      radial-gradient(circle at 15% 22%, hsl(var(--ink) / 0.035) 0, transparent 40%),
+      radial-gradient(circle at 85% 78%, hsl(var(--ink) / 0.04) 0, transparent 45%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.08 0 0 0 0 0.1 0 0 0 0 0.16 0 0 0 0.12 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    background-size: auto, auto, 180px 180px;
+  }
+  .dark .paper-grain {
+    opacity: 0.28;
+    mix-blend-mode: screen;
   }
 
-  .dark .bg-slate-50,
-  .dark .bg-slate-100 {
-    background-color: hsl(var(--muted) / 0.35);
+  /* Dashed perforation, used between ticket halves */
+  .rule-perf {
+    background-image: linear-gradient(to right, hsl(var(--ink) / 0.3) 50%, transparent 0);
+    background-size: 10px 1px;
+    background-repeat: repeat-x;
+    background-position: center;
+  }
+  .rule-perf-v {
+    background-image: linear-gradient(to bottom, hsl(var(--ink) / 0.3) 50%, transparent 0);
+    background-size: 1px 10px;
+    background-repeat: repeat-y;
+    background-position: center;
   }
 
-  .dark .border-slate-200,
-  .dark .border-slate-300 {
-    border-color: hsl(var(--border));
+  /* Scalloped edge (like a ticket stub) */
+  .ticket-edge-top {
+    --scallop-size: 10px;
+    mask-image:
+      radial-gradient(circle at 50% 0, transparent var(--scallop-size), black calc(var(--scallop-size) + 0.5px));
+    mask-size: 20px 100%;
+    mask-repeat: repeat-x;
+    mask-position: top;
+    -webkit-mask-image:
+      radial-gradient(circle at 50% 0, transparent var(--scallop-size), black calc(var(--scallop-size) + 0.5px));
+    -webkit-mask-size: 20px 100%;
+    -webkit-mask-repeat: repeat-x;
+    -webkit-mask-position: top;
   }
 
-  .dark .text-slate-400,
-  .dark .text-slate-500,
-  .dark .text-slate-700 {
-    color: hsl(var(--muted-foreground));
+  /* monospace numerics for times, codes, stats */
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  /* rubber-stamp text style */
+  .stamp {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.625rem;
+    font-weight: 600;
   }
 
-  .dark .bg-blue-50 {
-    background-color: rgb(30 58 138 / 0.35);
+  /* carbon-paper underline for form fields */
+  .underline-rule {
+    background-image: linear-gradient(to right, hsl(var(--ink) / 0.5) 50%, transparent 0);
+    background-size: 6px 1px;
+    background-repeat: repeat-x;
+    background-position: left bottom;
+    padding-bottom: 2px;
   }
 
-  .dark .bg-blue-100 {
-    background-color: rgb(30 58 138 / 0.55);
-  }
+  /* Map legacy hardcoded brand color to ink */
+  .bg-\[\#1e3a8a\] { background-color: hsl(var(--ink)) !important; }
+  .hover\:bg-\[\#172b6d\]:hover { background-color: hsl(var(--ink-dim)) !important; }
 
-  .dark .border-blue-100,
-  .dark .border-blue-200 {
-    border-color: rgb(59 130 246 / 0.45);
-  }
+  /* Soften the harsh "bg-white" in legacy components in dark mode */
+  .dark .bg-white { background-color: hsl(var(--card)); color: hsl(var(--ink)); }
 
-  .dark .text-blue-800,
-  .dark .text-blue-900 {
-    color: rgb(191 219 254);
-  }
-
-  .dark .bg-emerald-50 {
-    background-color: rgb(6 78 59 / 0.45);
-  }
-
-  .dark .border-emerald-200 {
-    border-color: rgb(16 185 129 / 0.45);
-  }
-
-  .dark .text-emerald-800 {
-    color: rgb(167 243 208);
-  }
-
-  .dark .bg-rose-50 {
-    background-color: rgb(136 19 55 / 0.45);
-  }
-
-  .dark .bg-rose-100 {
-    background-color: rgb(136 19 55 / 0.55);
-  }
-
-  .dark .border-rose-200 {
-    border-color: rgb(244 63 94 / 0.45);
-  }
-
-  .dark .text-rose-800 {
-    color: rgb(254 205 211);
-  }
-
-  .dark .bg-amber-50 {
-    background-color: rgb(120 53 15 / 0.45);
-  }
-
-  .dark .bg-amber-100 {
-    background-color: rgb(120 53 15 / 0.55);
-  }
-
-  .dark .border-amber-200 {
-    border-color: rgb(245 158 11 / 0.45);
-  }
-
-  .dark .text-amber-800 {
-    color: rgb(254 243 199);
-  }
-
-  .dark .bg-violet-100 {
-    background-color: rgb(76 29 149 / 0.55);
-  }
-
-  .dark .text-violet-800 {
-    color: rgb(221 214 254);
-  }
+  /* Status chip re-skins for legacy markup */
+  .bg-emerald-50 { background-color: hsl(var(--sage-soft)) !important; }
+  .bg-emerald-100 { background-color: hsl(var(--sage-soft)) !important; }
+  .border-emerald-200 { border-color: hsl(var(--sage) / 0.4) !important; }
+  .text-emerald-800, .text-emerald-900 { color: hsl(var(--sage)) !important; }
+  .bg-amber-50 { background-color: hsl(var(--ochre-soft)) !important; }
+  .bg-amber-100 { background-color: hsl(var(--ochre-soft)) !important; }
+  .border-amber-200 { border-color: hsl(var(--ochre) / 0.4) !important; }
+  .text-amber-800 { color: hsl(var(--ochre)) !important; }
+  .bg-rose-50 { background-color: hsl(var(--cherry-soft)) !important; }
+  .bg-rose-100 { background-color: hsl(var(--cherry-soft)) !important; }
+  .border-rose-200 { border-color: hsl(var(--cherry) / 0.4) !important; }
+  .text-rose-800 { color: hsl(var(--cherry)) !important; }
+  .bg-blue-50 { background-color: hsl(var(--paper)) !important; }
+  .bg-blue-100 { background-color: hsl(var(--secondary)) !important; }
+  .border-blue-100, .border-blue-200 { border-color: hsl(var(--rule)) !important; }
+  .text-blue-800, .text-blue-900 { color: hsl(var(--ink)) !important; }
+  .bg-violet-100 { background-color: hsl(var(--secondary)) !important; }
+  .text-violet-800 { color: hsl(var(--ink)) !important; }
+  .bg-slate-50, .bg-slate-100 { background-color: hsl(var(--secondary)) !important; }
+  .bg-muted\/40 { background-color: hsl(var(--muted) / 0.5) !important; }
+  .text-slate-400, .text-slate-500, .text-slate-700 { color: hsl(var(--ink-muted)) !important; }
 }
 
 @layer components {

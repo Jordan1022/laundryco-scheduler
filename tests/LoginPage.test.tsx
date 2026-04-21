@@ -29,7 +29,7 @@ describe('LoginPage', () => {
   it('renders visible field labels', () => {
     render(<LoginPage />)
 
-    expect(screen.getByLabelText('Email address')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email on file')).toBeInTheDocument()
     expect(screen.getByLabelText('Password')).toBeInTheDocument()
   })
 
@@ -39,12 +39,12 @@ describe('LoginPage', () => {
 
     render(<LoginPage />)
 
-    await user.type(screen.getByLabelText('Email address'), 'manager@laundryco.com')
+    await user.type(screen.getByLabelText('Email on file'), 'manager@laundryco.com')
     await user.type(screen.getByLabelText('Password'), 'bad-password')
-    await user.click(screen.getByRole('button', { name: 'Sign In' }))
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
 
     await waitFor(() => {
-      expect(screen.getByText('We could not sign you in. Check your email and password and try again.')).toBeInTheDocument()
+      expect(screen.getByText(/Those credentials don’t match/)).toBeInTheDocument()
     })
     expect(push).not.toHaveBeenCalled()
     expect(refresh).not.toHaveBeenCalled()
