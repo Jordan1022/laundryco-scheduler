@@ -15,8 +15,22 @@ const shift1 = {
   endLabel: '12:00',
   dateTimeLabel: 'Thu Apr 16, 2026, 8:00 AM - 12:00 PM',
   assigneeLabel: 'Alice',
+  assignedUserId: 'user-alice',
   isMine: false,
   isOpen: false,
+}
+
+const openShift = {
+  shiftId: 'shift-2',
+  title: 'Evening load',
+  location: 'North Dock',
+  startLabel: '16:00',
+  endLabel: '20:00',
+  dateTimeLabel: 'Thu Apr 16, 2026, 4:00 PM - 8:00 PM',
+  assigneeLabel: 'Open',
+  assignedUserId: null,
+  isMine: false,
+  isOpen: true,
 }
 
 const baseDay = {
@@ -69,10 +83,77 @@ describe('ScheduleGridWithModal', () => {
 
     expect(screen.getByRole('heading', { name: 'Thursday, April 16' })).toBeInTheDocument()
     expect(screen.getAllByText(/Alice/).length).toBeGreaterThan(0)
-    expect(screen.getByRole('link', { name: 'View / Edit' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'More' })).toHaveAttribute(
       'href',
       '/admin?openShiftId=shift-1#upcoming-shifts',
     )
+  })
+
+  it('renders an inline assign form on open shifts for admins', async () => {
+    const user = userEvent.setup()
+    const assignShiftAction = vi.fn()
+
+    const openDay = {
+      ...baseDay,
+      shiftCount: 1,
+      visibleShifts: [openShift],
+      shifts: [openShift],
+    }
+
+    render(
+      <ScheduleGridWithModal
+        weekdayLabels={['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']}
+        selectedView="week"
+        dayEntries={[openDay]}
+        canManageStaff
+        staffOptions={[{ id: 'user-bob', name: 'Bob', role: 'employee' }]}
+        returnView="week"
+        returnDate="2026-04-16"
+        assignShiftAction={assignShiftAction}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /16 1 shift Open 16:00.*20:00/i }))
+    expect(screen.getByRole('heading', { name: 'Thursday, April 16' })).toBeInTheDocument()
+
+    // Inline assign form is present with the expected shift id and staff options
+    const select = screen.getByLabelText('Assign to') as HTMLSelectElement
+    expect(select).toBeInTheDocument()
+    const optionValues = Array.from(select.options).map((o) => o.value)
+    expect(optionValues).toContain('user-bob')
+
+    const form = select.closest('form')
+    expect(form).not.toBeNull()
+    const shiftInput = form!.querySelector('input[name="shiftId"]') as HTMLInputElement
+    expect(shiftInput.value).toBe('shift-2')
+    expect(screen.getByRole('button', { name: 'Fill' })).toBeInTheDocument()
+  })
+
+  it('does not render the inline assign form when the user cannot manage staff', async () => {
+    const user = userEvent.setup()
+
+    const openDay = {
+      ...baseDay,
+      shiftCount: 1,
+      visibleShifts: [openShift],
+      shifts: [openShift],
+    }
+
+    render(
+      <ScheduleGridWithModal
+        weekdayLabels={['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']}
+        selectedView="week"
+        dayEntries={[openDay]}
+        canManageStaff={false}
+        staffOptions={[{ id: 'user-bob', name: 'Bob', role: 'employee' }]}
+        returnView="week"
+        returnDate="2026-04-16"
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /16 1 shift Open 16:00.*20:00/i }))
+    expect(screen.queryByLabelText('Assign to')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Fill' })).not.toBeInTheDocument()
   })
 
   it('shows the empty state for a day without shifts', async () => {

@@ -14,6 +14,7 @@ type DayShift = {
   endLabel: string
   dateTimeLabel: string
   assigneeLabel: string
+  assignedUserId: string | null
   isMine: boolean
   isOpen: boolean
 }
@@ -46,6 +47,7 @@ type ScheduleGridWithModalProps = {
   returnView: 'week' | 'month'
   returnDate: string
   createShiftAction?: (formData: FormData) => void | Promise<void>
+  assignShiftAction?: (formData: FormData) => void | Promise<void>
 }
 
 export default function ScheduleGridWithModal({
@@ -57,6 +59,7 @@ export default function ScheduleGridWithModal({
   returnView,
   returnDate,
   createShiftAction,
+  assignShiftAction,
 }: ScheduleGridWithModalProps) {
   const [activeDayKey, setActiveDayKey] = useState<string | null>(null)
   const activeDay = useMemo(() => dayEntries.find((day) => day.key === activeDayKey) ?? null, [activeDayKey, dayEntries])
@@ -260,11 +263,52 @@ export default function ScheduleGridWithModal({
                       {canManageStaff ? (
                         <Button asChild size="sm" variant="outline">
                           <Link href={`/admin?openShiftId=${shift.shiftId}#upcoming-shifts`}>
-                            View / Edit
+                            More
                           </Link>
                         </Button>
                       ) : null}
                     </div>
+
+                    {canManageStaff && assignShiftAction && staffOptions.length > 0 ? (
+                      <form
+                        action={assignShiftAction}
+                        className={cn(
+                          'mt-3 flex flex-wrap items-end gap-2 border-t border-dashed pt-3',
+                          shift.isMine ? 'border-paper/30' : 'border-ink/20',
+                        )}
+                      >
+                        <input type="hidden" name="returnView" value={returnView} />
+                        <input type="hidden" name="returnDate" value={returnDate} />
+                        <input type="hidden" name="shiftId" value={shift.shiftId} />
+                        <div className="flex-1 min-w-[10rem] space-y-1">
+                          <label
+                            htmlFor={`assign-${shift.shiftId}`}
+                            className={cn(
+                              'stamp',
+                              shift.isMine ? 'text-paper/70' : 'text-ink/60',
+                            )}
+                          >
+                            {shift.isOpen ? 'Assign to' : 'Reassign to'}
+                          </label>
+                          <select
+                            id={`assign-${shift.shiftId}`}
+                            name="assignedUserId"
+                            defaultValue={shift.assignedUserId ?? ''}
+                            className="flex h-9 w-full rounded-sm border border-input bg-background px-2 text-sm text-ink"
+                          >
+                            <option value="">{shift.isOpen ? 'Unassigned' : 'Unassign'}</option>
+                            {staffOptions.map((staff) => (
+                              <option key={staff.id} value={staff.id}>
+                                {staff.name} ({staff.role})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <Button type="submit" size="sm">
+                          {shift.isOpen ? 'Fill' : 'Save'}
+                        </Button>
+                      </form>
+                    ) : null}
                   </div>
                 ))
               )}
@@ -272,7 +316,10 @@ export default function ScheduleGridWithModal({
 
             {canManageStaff && createShiftAction ? (
               <div className="mt-5 border-t pt-4">
-                <h4 className="font-medium">Add Shift For {activeDay.dateLabel}</h4>
+                <h4 className="font-medium">Create a new shift on {activeDay.dateLabel}</h4>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  This adds an additional shift to the day. To fill an existing open shift above, use its “Assign to” menu.
+                </p>
                 <form action={createShiftAction} className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <input type="hidden" name="returnView" value={returnView} />
                   <input type="hidden" name="returnDate" value={returnDate} />
