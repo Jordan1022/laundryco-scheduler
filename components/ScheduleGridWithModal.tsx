@@ -113,15 +113,15 @@ export default function ScheduleGridWithModal({
                             : 'border-ink/20 bg-bleach',
                       )}
                     >
-                      <p className={cn('font-mono text-xs tabular', shift.isMine ? 'text-paper/80' : 'text-ink/70')}>
-                        {shift.startLabel}–{shift.endLabel}
-                      </p>
-                      <p className={cn('mt-0.5 text-sm font-medium', shift.isMine && 'text-paper')}>
+                      <p className={cn('text-sm font-medium', shift.isMine && 'text-paper')}>
                         {shift.isOpen ? (
                           <span className="text-cherry">Open · needs staff</span>
                         ) : (
                           shift.assigneeLabel
                         )}
+                      </p>
+                      <p className={cn('mt-0.5 font-mono text-xs tabular', shift.isMine ? 'text-paper/80' : 'text-ink/70')}>
+                        {shift.startLabel}–{shift.endLabel}
                       </p>
                     </div>
                   ))
@@ -182,11 +182,11 @@ export default function ScheduleGridWithModal({
                             : 'border-ink/20 bg-bleach text-ink',
                       )}
                     >
+                      <p className="truncate font-medium">
+                        {shift.isOpen ? 'Open' : shift.assigneeLabel}
+                      </p>
                       <p className="font-mono tabular">
                         {shift.startLabel}–{shift.endLabel}
-                      </p>
-                      <p className="truncate">
-                        {shift.isOpen ? 'Open' : shift.assigneeLabel}
                       </p>
                     </div>
                   ))}
@@ -241,15 +241,15 @@ export default function ScheduleGridWithModal({
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <p className={cn('font-mono text-sm tabular', shift.isMine ? 'text-paper' : 'text-ink')}>
-                          {shift.startLabel} – {shift.endLabel}
-                        </p>
-                        <p className={cn('mt-1 text-sm font-medium', shift.isMine && 'text-paper')}>
+                        <p className={cn('text-sm font-medium', shift.isMine && 'text-paper')}>
                           {shift.isOpen ? (
                             <span className="text-cherry">Open · needs staff</span>
                           ) : (
                             shift.assigneeLabel + (shift.isMine ? ' (you)' : '')
                           )}
+                        </p>
+                        <p className={cn('mt-1 font-mono text-sm tabular', shift.isMine ? 'text-paper/80' : 'text-ink-muted')}>
+                          {shift.startLabel} – {shift.endLabel}
                         </p>
                         {shift.location ? (
                           <p className={cn('mt-1 text-xs', shift.isMine ? 'text-paper/70' : 'text-ink-muted')}>
