@@ -1898,9 +1898,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <TicketCard tone="bleach" className="p-4">
-            <span className="stamp text-ink/60">Pending</span>
-            <p className="mt-1 font-serif text-3xl leading-none text-ink">{pendingRequestsCount}</p>
-            <p className="stamp mt-2 text-ink/50">Requests</p>
+            <span className="stamp text-ink/60">Week hours</span>
+            <p className="mt-1 font-serif text-3xl leading-none text-ink tabular">{formatHours(weekHours)}</p>
+            <p className="stamp mt-2 text-ink/50">Assigned</p>
           </TicketCard>
           <TicketCard tone="bleach" className="p-4">
             <span className="stamp text-ink/60">Unfilled</span>
@@ -1910,14 +1910,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <p className="stamp mt-2 text-ink/50">Next {upcomingShiftRows.length}</p>
           </TicketCard>
           <TicketCard tone="bleach" className="p-4">
+            <span className="stamp text-ink/60">Pending</span>
+            <p className="mt-1 font-serif text-3xl leading-none text-ink">{pendingRequestsCount}</p>
+            <p className="stamp mt-2 text-ink/50">Requests</p>
+          </TicketCard>
+          <TicketCard tone="bleach" className="p-4">
             <span className="stamp text-ink/60">Team</span>
             <p className="mt-1 font-serif text-3xl leading-none text-ink">{activeStaff.length}</p>
             <p className="stamp mt-2 text-ink/50">On payroll</p>
-          </TicketCard>
-          <TicketCard tone="bleach" className="p-4">
-            <span className="stamp text-ink/60">Week hours</span>
-            <p className="mt-1 font-serif text-3xl leading-none text-ink tabular">{formatHours(weekHours)}</p>
-            <p className="stamp mt-2 text-ink/50">Assigned</p>
           </TicketCard>
         </div>
 
