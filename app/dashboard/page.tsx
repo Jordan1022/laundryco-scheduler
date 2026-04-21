@@ -6,7 +6,7 @@ import { db } from '@/lib/db'
 import { assignments, notifications, shiftSwapRequests, shifts, timeOffRequests, users } from '@/lib/schema'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import SignOutButton from '@/components/SignOutButton'
 import BrowserAlertToggle from '@/components/BrowserAlertToggle'
@@ -14,7 +14,7 @@ import { DatePickerField } from '@/components/ui/date-time-picker'
 import { Brandmark } from '@/components/ui/Brandmark'
 import { TicketCard, TicketRow, Stamp } from '@/components/ui/TicketCard'
 import ConfirmSubmitButton from '@/components/ConfirmSubmitButton'
-import { markAllNotificationsRead, markNotificationRead, notifyRoles, notifyUsers } from '@/lib/notifications'
+import { notifyRoles, notifyUsers } from '@/lib/notifications'
 import ScheduleGridWithModal from '@/components/ScheduleGridWithModal'
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
 
@@ -381,31 +381,6 @@ async function createShiftFromCalendarAction(formData: FormData) {
   }
 
   redirect(buildDashboardReturnUrl(returnView, returnDate, { status: 'calendar-shift-created', hash: 'schedule' }))
-}
-
-async function markNotificationReadAction(formData: FormData) {
-  'use server'
-
-  const session = await requireAuthenticatedSession()
-  const notificationId = String(formData.get('notificationId') ?? '')
-  const { returnView, returnDate } = getReturnContext(formData)
-
-  if (!notificationId) {
-    redirect(buildDashboardReturnUrl(returnView, returnDate, { hash: 'notifications' }))
-  }
-
-  await markNotificationRead(session.user.id, notificationId)
-  redirect(buildDashboardReturnUrl(returnView, returnDate, { hash: 'notifications' }))
-}
-
-async function markAllNotificationsReadAction(formData: FormData) {
-  'use server'
-
-  const session = await requireAuthenticatedSession()
-  const { returnView, returnDate } = getReturnContext(formData)
-
-  await markAllNotificationsRead(session.user.id)
-  redirect(buildDashboardReturnUrl(returnView, returnDate, { hash: 'notifications' }))
 }
 
 async function dismissNotificationAction(formData: FormData) {
@@ -815,18 +790,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <p className="mt-1 font-serif text-2xl text-ink">The bulletin board</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {unreadNotificationsCount > 0 ? (
-                <Stamp tone="cherry">{unreadNotificationsCount} unread</Stamp>
+              {notificationRows.length > 0 ? (
+                <Stamp tone={unreadNotificationsCount > 0 ? 'cherry' : 'muted'}>
+                  {notificationRows.length} pinned
+                </Stamp>
               ) : (
-                <Stamp tone="sage">All read</Stamp>
+                <Stamp tone="sage">Empty</Stamp>
               )}
-              {unreadNotificationsCount > 0 ? (
-                <form action={markAllNotificationsReadAction}>
-                  <input type="hidden" name="returnView" value={selectedView} />
-                  <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
-                  <Button type="submit" size="sm" variant="outline">Mark all read</Button>
-                </form>
-              ) : null}
               {notificationRows.length > 0 ? (
                 <form action={dismissAllNotificationsAction}>
                   <input type="hidden" name="returnView" value={selectedView} />
@@ -857,8 +827,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <li
                     key={notification.id}
                     className={cn(
-                      'flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between',
-                      !notification.isRead && 'bg-cherry-soft/40 -mx-2 px-2 rounded-sm',
+                      'relative flex flex-col gap-2 py-3 pr-10 sm:flex-row sm:items-start sm:justify-between',
+                      !notification.isRead && 'bg-cherry-soft/40 -mx-2 px-2 pr-10 rounded-sm',
                     )}
                   >
                     <div className="flex-1 space-y-1">
@@ -871,29 +841,26 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         {dateTimeLabel.format(notification.createdAt)}
                       </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {notification.link ? (
+                    {notification.link ? (
+                      <div className="flex items-center">
                         <Button asChild size="sm" variant="outline">
                           <Link href={notification.link}>Open</Link>
                         </Button>
-                      ) : null}
-                      {!notification.isRead ? (
-                        <form action={markNotificationReadAction}>
-                          <input type="hidden" name="notificationId" value={notification.id} />
-                          <input type="hidden" name="returnView" value={selectedView} />
-                          <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
-                          <Button type="submit" size="sm" variant="ghost">Mark read</Button>
-                        </form>
-                      ) : null}
-                      <form action={dismissNotificationAction}>
-                        <input type="hidden" name="notificationId" value={notification.id} />
-                        <input type="hidden" name="returnView" value={selectedView} />
-                        <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
-                        <Button type="submit" size="sm" variant="ghost" aria-label="Dismiss notification">
-                          Dismiss
-                        </Button>
-                      </form>
-                    </div>
+                      </div>
+                    ) : null}
+                    <form action={dismissNotificationAction} className="absolute right-1 top-2">
+                      <input type="hidden" name="notificationId" value={notification.id} />
+                      <input type="hidden" name="returnView" value={selectedView} />
+                      <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                      <button
+                        type="submit"
+                        aria-label="Dismiss notification"
+                        title="Dismiss"
+                        className="rounded-sm p-1.5 text-ink/40 transition-colors hover:bg-ink/5 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </form>
                   </li>
                 ))}
               </ul>
