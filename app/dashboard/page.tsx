@@ -13,6 +13,7 @@ import BrowserAlertToggle from '@/components/BrowserAlertToggle'
 import { DatePickerField } from '@/components/ui/date-time-picker'
 import { Brandmark } from '@/components/ui/Brandmark'
 import { TicketCard, TicketRow, Stamp } from '@/components/ui/TicketCard'
+import ConfirmSubmitButton from '@/components/ConfirmSubmitButton'
 import { markAllNotificationsRead, markNotificationRead, notifyRoles, notifyUsers } from '@/lib/notifications'
 import ScheduleGridWithModal from '@/components/ScheduleGridWithModal'
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
@@ -404,6 +405,31 @@ async function markAllNotificationsReadAction(formData: FormData) {
   const { returnView, returnDate } = getReturnContext(formData)
 
   await markAllNotificationsRead(session.user.id)
+  redirect(buildDashboardReturnUrl(returnView, returnDate, { hash: 'notifications' }))
+}
+
+async function dismissNotificationAction(formData: FormData) {
+  'use server'
+
+  const session = await requireAuthenticatedSession()
+  const notificationId = String(formData.get('notificationId') ?? '')
+  const { returnView, returnDate } = getReturnContext(formData)
+
+  if (notificationId) {
+    await db.delete(notifications).where(
+      and(eq(notifications.id, notificationId), eq(notifications.userId, session.user.id)),
+    )
+  }
+  redirect(buildDashboardReturnUrl(returnView, returnDate, { hash: 'notifications' }))
+}
+
+async function dismissAllNotificationsAction(formData: FormData) {
+  'use server'
+
+  const session = await requireAuthenticatedSession()
+  const { returnView, returnDate } = getReturnContext(formData)
+
+  await db.delete(notifications).where(eq(notifications.userId, session.user.id))
   redirect(buildDashboardReturnUrl(returnView, returnDate, { hash: 'notifications' }))
 }
 
@@ -801,6 +827,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <Button type="submit" size="sm" variant="outline">Mark all read</Button>
                 </form>
               ) : null}
+              {notificationRows.length > 0 ? (
+                <form action={dismissAllNotificationsAction}>
+                  <input type="hidden" name="returnView" value={selectedView} />
+                  <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                  <ConfirmSubmitButton
+                    type="submit"
+                    size="sm"
+                    variant="outline"
+                    confirmMessage="Clear the whole bulletin board? Dismissed notifications can’t be brought back."
+                  >
+                    Clear board
+                  </ConfirmSubmitButton>
+                </form>
+              ) : null}
             </div>
           </div>
 
@@ -845,6 +885,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           <Button type="submit" size="sm" variant="ghost">Mark read</Button>
                         </form>
                       ) : null}
+                      <form action={dismissNotificationAction}>
+                        <input type="hidden" name="notificationId" value={notification.id} />
+                        <input type="hidden" name="returnView" value={selectedView} />
+                        <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                        <Button type="submit" size="sm" variant="ghost" aria-label="Dismiss notification">
+                          Dismiss
+                        </Button>
+                      </form>
                     </div>
                   </li>
                 ))}
