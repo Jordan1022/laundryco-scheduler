@@ -442,12 +442,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       location: shifts.location,
       startTime: shifts.startTime,
       endTime: shifts.endTime,
+      assigneeUserId: assignments.userId,
+      assigneeName: users.name,
     })
-      .from(assignments)
-      .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
+      .from(shifts)
+      .leftJoin(assignments, and(eq(assignments.shiftId, shifts.id), eq(assignments.status, 'assigned')))
+      .leftJoin(users, eq(assignments.userId, users.id))
       .where(and(
-        eq(assignments.userId, session.user.id),
-        eq(assignments.status, 'assigned'),
         gte(shifts.startTime, scheduleRangeStart),
         lt(shifts.startTime, scheduleRangeEnd),
         or(isNull(shifts.status), eq(shifts.status, 'published')),
@@ -538,8 +539,35 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       : Promise.resolve([]),
   ])
 
-  const shiftsByDay = new Map<string, typeof scheduledShiftRows>()
-  for (const shift of scheduledShiftRows) {
+  type ShiftWithAssignees = {
+    shiftId: string
+    title: string
+    location: string | null
+    startTime: Date
+    endTime: Date
+    assignees: Array<{ userId: string; name: string }>
+  }
+  const shiftsById = new Map<string, ShiftWithAssignees>()
+  for (const row of scheduledShiftRows) {
+    let shift = shiftsById.get(row.shiftId)
+    if (!shift) {
+      shift = {
+        shiftId: row.shiftId,
+        title: row.title,
+        location: row.location,
+        startTime: row.startTime,
+        endTime: row.endTime,
+        assignees: [],
+      }
+      shiftsById.set(row.shiftId, shift)
+    }
+    if (row.assigneeUserId && row.assigneeName) {
+      shift.assignees.push({ userId: row.assigneeUserId, name: row.assigneeName })
+    }
+  }
+
+  const shiftsByDay = new Map<string, ShiftWithAssignees[]>()
+  for (const shift of shiftsById.values()) {
     const key = dateKey(shift.startTime)
     const dayShifts = shiftsByDay.get(key)
     if (dayShifts) {
@@ -562,17 +590,31 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const formError = getQueryValue(searchParams?.error)
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || ''
   const maxDayShiftsVisible = selectedView === 'month' ? 2 : 4
+  const firstName = (full: string) => full.split(' ')[0] || full
   const dayEntries = visibleDays.map((day) => {
     const key = dateKey(day)
     const dayShifts = shiftsByDay.get(key) ?? []
-    const compactShifts = dayShifts.map((shift) => ({
-      shiftId: shift.shiftId,
-      title: shift.title,
-      location: shift.location ?? '',
-      startLabel: shortTimeLabel.format(shift.startTime),
-      endLabel: shortTimeLabel.format(shift.endTime),
-      dateTimeLabel: formatShiftDateTime(shift.startTime, shift.endTime),
-    }))
+    const compactShifts = dayShifts.map((shift) => {
+      const names = shift.assignees.map((a) => firstName(a.name))
+      const isMine = shift.assignees.some((a) => a.userId === session.user.id)
+      const isOpen = shift.assignees.length === 0
+      const assigneeLabel = isOpen
+        ? 'Open'
+        : names.length === 1
+          ? names[0]
+          : `${names[0]} +${names.length - 1}`
+      return {
+        shiftId: shift.shiftId,
+        title: shift.title,
+        location: shift.location ?? '',
+        startLabel: shortTimeLabel.format(shift.startTime),
+        endLabel: shortTimeLabel.format(shift.endTime),
+        dateTimeLabel: formatShiftDateTime(shift.startTime, shift.endTime),
+        assigneeLabel,
+        isMine,
+        isOpen,
+      }
+    })
     return {
       key,
       dateIso: formatDateParam(day),
