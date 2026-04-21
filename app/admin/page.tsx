@@ -17,7 +17,7 @@ import { TicketCard, Stamp } from '@/components/ui/TicketCard'
 import { Masthead } from '@/components/ui/Masthead'
 import AdminTabs, { resolveAdminTab } from '@/components/AdminTabs'
 import AdminToast from '@/components/AdminToast'
-import { Drawer } from '@/components/ui/drawer'
+import { Drawer, DrawerForm } from '@/components/ui/drawer'
 import { cn } from '@/lib/utils'
 import { CalendarDays, CalendarPlus, CheckSquare, Pencil, Phone, Plus, UserPlus } from 'lucide-react'
 import SignOutButton from '@/components/SignOutButton'
@@ -1398,7 +1398,7 @@ function ShiftEditDrawer({
         </Button>
       }
     >
-      <form action={updateShiftAction} className="space-y-4">
+      <DrawerForm action={updateShiftAction} className="space-y-4">
         <input type="hidden" name="shiftId" value={shift.id} />
         <div className="space-y-1.5">
           <label htmlFor={`shift-assignee-${shift.id}`} className="text-sm font-medium">Assign to</label>
@@ -1486,9 +1486,9 @@ function ShiftEditDrawer({
         <div className="flex justify-end gap-2 pt-2">
           <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">Save Changes</Button>
         </div>
-      </form>
+      </DrawerForm>
 
-      <form action={setShiftCancelledAction} className="mt-4 border-t pt-4 flex justify-end">
+      <DrawerForm action={setShiftCancelledAction} className="mt-4 border-t pt-4 flex justify-end">
         <input type="hidden" name="shiftId" value={shift.id} />
         <input type="hidden" name="mode" value={shift.status === 'cancelled' ? 'restore' : 'cancel'} />
         <ConfirmSubmitButton
@@ -1503,7 +1503,7 @@ function ShiftEditDrawer({
         >
           {shift.status === 'cancelled' ? 'Restore Shift' : 'Cancel Shift'}
         </ConfirmSubmitButton>
-      </form>
+      </DrawerForm>
     </Drawer>
   )
 }

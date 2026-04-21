@@ -64,7 +64,7 @@ describe('ScheduleGridWithModal', () => {
     vi.restoreAllMocks()
   })
 
-  it('opens the selected day details and shows shift actions for managers', async () => {
+  it('opens a single-shift popup when a shift tile is clicked', async () => {
     const user = userEvent.setup()
 
     render(
@@ -79,17 +79,19 @@ describe('ScheduleGridWithModal', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /16 1 shift Alice 08:00.*12:00/i }))
+    const tiles = screen.getAllByRole('button', { name: /Alice 08:00.*12:00/i })
+    await user.click(tiles[0])
 
-    expect(screen.getByRole('heading', { name: 'Thursday, April 16' })).toBeInTheDocument()
+    // Popup shows the shift date eyebrow and assignee heading
+    expect(screen.getAllByText('Thursday, April 16').length).toBeGreaterThan(0)
     expect(screen.getAllByText(/Alice/).length).toBeGreaterThan(0)
-    expect(screen.getByRole('link', { name: 'More' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Edit time/i })).toHaveAttribute(
       'href',
       '/admin?openShiftId=shift-1#upcoming-shifts',
     )
   })
 
-  it('renders an inline assign form on open shifts for admins', async () => {
+  it('renders the inline assign form on open shifts for admins', async () => {
     const user = userEvent.setup()
     const assignShiftAction = vi.fn()
 
@@ -113,14 +115,12 @@ describe('ScheduleGridWithModal', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /16 1 shift Open 16:00.*20:00/i }))
-    expect(screen.getByRole('heading', { name: 'Thursday, April 16' })).toBeInTheDocument()
+    const tiles = screen.getAllByRole('button', { name: /Open · needs staff 16:00.*20:00/i })
+    await user.click(tiles[0])
 
-    // Inline assign form is present with the expected shift id and staff options
     const select = screen.getByLabelText('Assign to') as HTMLSelectElement
     expect(select).toBeInTheDocument()
-    const optionValues = Array.from(select.options).map((o) => o.value)
-    expect(optionValues).toContain('user-bob')
+    expect(Array.from(select.options).map((o) => o.value)).toContain('user-bob')
 
     const form = select.closest('form')
     expect(form).not.toBeNull()
@@ -151,14 +151,13 @@ describe('ScheduleGridWithModal', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /16 1 shift Open 16:00.*20:00/i }))
+    const tiles = screen.getAllByRole('button', { name: /Open · needs staff 16:00.*20:00/i })
+    await user.click(tiles[0])
     expect(screen.queryByLabelText('Assign to')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Fill' })).not.toBeInTheDocument()
   })
 
-  it('shows the empty state for a day without shifts', async () => {
-    const user = userEvent.setup()
-
+  it('renders an empty day without opening anything when there are no shifts', () => {
     render(
       <ScheduleGridWithModal
         weekdayLabels={['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']}
@@ -171,9 +170,27 @@ describe('ScheduleGridWithModal', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: '17' }))
-
-    expect(screen.getByText('No shifts for this day yet.')).toBeInTheDocument()
+    // No shift tiles exist for the empty day on mobile or desktop
+    expect(screen.queryByRole('button', { name: /08:00|16:00/ })).not.toBeInTheDocument()
+    // Mobile empty-state message is rendered
     expect(screen.getAllByText('No shifts scheduled.').length).toBeGreaterThan(0)
+  })
+
+  it('shows the add-shift button for admins when a create action is provided', () => {
+    render(
+      <ScheduleGridWithModal
+        weekdayLabels={['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']}
+        selectedView="week"
+        dayEntries={[baseDay]}
+        canManageStaff
+        staffOptions={[]}
+        returnView="week"
+        returnDate="2026-04-16"
+        createShiftAction={vi.fn()}
+      />,
+    )
+
+    // Mobile renders a labelled "Add shift" button; desktop renders an icon button
+    expect(screen.getAllByRole('button', { name: /Add shift/i }).length).toBeGreaterThan(0)
   })
 })
