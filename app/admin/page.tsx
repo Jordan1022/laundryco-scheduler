@@ -121,6 +121,9 @@ function endDateFromPreset(startDate: Date, rangePreset: string, customEndDateRa
   if (rangePreset === 'custom') {
     return parseDateOnly(customEndDateRaw)
   }
+  if (rangePreset === 'ongoing') {
+    return plusDays(startDate, MAX_BULK_RANGE_DAYS - 1)
+  }
   if (rangePreset === 'month') {
     return plusDays(startDate, 29)
   }
