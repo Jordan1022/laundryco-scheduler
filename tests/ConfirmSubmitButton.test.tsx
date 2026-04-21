@@ -1,54 +1,56 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ConfirmSubmitButton from '@/components/ConfirmSubmitButton'
 
 describe('ConfirmSubmitButton', () => {
-  const confirmSpy = vi.spyOn(window, 'confirm')
-
-  beforeEach(() => {
-    confirmSpy.mockReset()
-  })
-
-  afterEach(() => {
-    confirmSpy.mockReset()
-  })
-
-  it('prevents submission when confirmation is canceled', async () => {
+  it('does not submit until the confirmation dialog is accepted', async () => {
     const user = userEvent.setup()
-    confirmSpy.mockReturnValue(false)
     const onSubmit = vi.fn((event: React.FormEvent<HTMLFormElement>) => event.preventDefault())
 
     render(
       <form onSubmit={onSubmit}>
-        <ConfirmSubmitButton confirmMessage="Deactivate this staff account?">
+        <ConfirmSubmitButton
+          confirmTitle="Deactivate account"
+          confirmMessage="Deactivate this staff account?"
+        >
           Deactivate
         </ConfirmSubmitButton>
       </form>,
     )
 
     await user.click(screen.getByRole('button', { name: 'Deactivate' }))
+    // Dialog is visible
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText('Deactivate this staff account?')).toBeInTheDocument()
+    // Nothing submitted yet
+    expect(onSubmit).not.toHaveBeenCalled()
 
-    expect(confirmSpy).toHaveBeenCalledWith('Deactivate this staff account?')
+    // Cancel path
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('allows submission when confirmation is accepted', async () => {
+  it('submits the form when the user confirms', async () => {
     const user = userEvent.setup()
-    confirmSpy.mockReturnValue(true)
     const onSubmit = vi.fn((event: React.FormEvent<HTMLFormElement>) => event.preventDefault())
 
     render(
       <form onSubmit={onSubmit}>
-        <ConfirmSubmitButton confirmMessage="Deactivate this staff account?">
+        <ConfirmSubmitButton
+          confirmTitle="Deactivate account"
+          confirmMessage="Deactivate this staff account?"
+        >
           Deactivate
         </ConfirmSubmitButton>
       </form>,
     )
 
     await user.click(screen.getByRole('button', { name: 'Deactivate' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
-    expect(confirmSpy).toHaveBeenCalledWith('Deactivate this staff account?')
     expect(onSubmit).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
