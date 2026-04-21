@@ -11,12 +11,6 @@ type BrandmarkProps = {
   withWordmark?: boolean
   subtitle?: string
   className?: string
-  /**
-   * Knock out the baked-in white background using mix-blend-mode: multiply.
-   * Works on cream/light surfaces. Set to false on dark backgrounds. Default: true.
-   * Remove entirely once logo artwork ships with a real alpha channel.
-   */
-  knockoutWhite?: boolean
 }
 
 const stampSizeClasses: Record<BrandmarkSize, string> = {
@@ -60,7 +54,6 @@ export function Brandmark({
   withWordmark = false,
   subtitle,
   className,
-  knockoutWhite = true,
 }: BrandmarkProps) {
   if (variant !== 'stamp') {
     const meta = variantSources[variant]
@@ -72,11 +65,7 @@ export function Brandmark({
           alt={meta.alt}
           width={Math.round(heightPx * meta.aspect)}
           height={heightPx}
-          className={cn(
-            'w-auto object-contain',
-            artworkSizeClasses[size],
-            knockoutWhite && 'mix-blend-multiply',
-          )}
+          className={cn('w-auto object-contain', artworkSizeClasses[size])}
           priority={size === 'lg' || size === 'xl'}
         />
         {withWordmark ? <BrandSubtitle subtitle={subtitle} /> : null}
