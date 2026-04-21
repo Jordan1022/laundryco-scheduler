@@ -697,7 +697,67 @@ async function updateShiftAction(formData: FormData) {
     })))
   }
 
-  redirect('/admin?status=shift-updated#upcoming-shifts')
+  let recurringAssignedCount = 0
+  const makeRecurring = formData.get('makeRecurring') === 'on'
+  if (makeRecurring && assignedUserId && status !== 'cancelled') {
+    const dayOfWeek = startDateTime.getDay()
+    const blockStartMin = startDateTime.getHours() * 60 + startDateTime.getMinutes()
+    const blockEndMin = endDateTime.getHours() * 60 + endDateTime.getMinutes()
+
+    const candidates = await db.select({
+      id: shifts.id,
+      startTime: shifts.startTime,
+      endTime: shifts.endTime,
+    })
+      .from(shifts)
+      .where(and(
+        gte(shifts.startTime, startDateTime),
+        ne(shifts.status, 'cancelled'),
+        ne(shifts.id, shiftId),
+      ))
+
+    const matching = candidates.filter((row) => {
+      if (row.startTime.getDay() !== dayOfWeek) return false
+      const s = row.startTime.getHours() * 60 + row.startTime.getMinutes()
+      const e = row.endTime.getHours() * 60 + row.endTime.getMinutes()
+      return s === blockStartMin && e === blockEndMin
+    })
+
+    if (matching.length > 0) {
+      const matchingIds = matching.map((s) => s.id)
+      const alreadyAssigned = new Set<string>()
+      for (let i = 0; i < matchingIds.length; i += DB_INSERT_CHUNK) {
+        const chunk = matchingIds.slice(i, i + DB_INSERT_CHUNK)
+        const rows = await db.select({ shiftId: assignments.shiftId })
+          .from(assignments)
+          .where(inArray(assignments.shiftId, chunk))
+        for (const row of rows) alreadyAssigned.add(row.shiftId)
+      }
+      const toAssignIds = matchingIds.filter((id) => !alreadyAssigned.has(id))
+      if (toAssignIds.length > 0) {
+        const values = toAssignIds.map((targetShiftId) => ({
+          shiftId: targetShiftId,
+          userId: assignedUserId,
+          status: 'assigned' as const,
+        }))
+        for (let i = 0; i < values.length; i += DB_INSERT_CHUNK) {
+          await db.insert(assignments).values(values.slice(i, i + DB_INSERT_CHUNK))
+        }
+        recurringAssignedCount = toAssignIds.length
+
+        if (status !== 'draft') {
+          await notifyUsers([{
+            userId: assignedUserId,
+            title: 'Recurring shifts assigned',
+            body: `You are now assigned to ${recurringAssignedCount} future recurring shift${recurringAssignedCount === 1 ? '' : 's'}.`,
+            link: '/dashboard',
+          }])
+        }
+      }
+    }
+  }
+
+  redirect(`/admin?status=shift-updated&recurringAssigned=${recurringAssignedCount}#upcoming-shifts`)
 }
 
 async function setShiftCancelledAction(formData: FormData) {
@@ -1287,6 +1347,7 @@ type AdminPageProps = {
     replaced?: string | string[]
     conflicts?: string | string[]
     skipped?: string | string[]
+    recurringAssigned?: string | string[]
     openShiftId?: string | string[]
     openStaffId?: string | string[]
     tab?: string | string[]
@@ -1352,6 +1413,19 @@ function ShiftEditDrawer({
               </option>
             ))}
           </select>
+          <label className="mt-2 flex items-start gap-2 rounded-sm border border-dashed border-ink/30 p-3 text-sm">
+            <input
+              type="checkbox"
+              name="makeRecurring"
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              <span className="font-medium text-ink">Make this recurring</span>
+              <span className="block text-xs text-muted-foreground">
+                Also attach this person to every future shift that matches this weekday + time. Shifts already assigned to someone else are left alone.
+              </span>
+            </span>
+          </label>
         </div>
         <div className="space-y-1.5">
           <label htmlFor={`shift-date-${shift.id}`} className="text-sm font-medium">Date</label>
@@ -1590,6 +1664,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const replacedCount = parseNonNegativeInt(getQueryValue(searchParams?.replaced))
   const conflictsCount = parseNonNegativeInt(getQueryValue(searchParams?.conflicts))
   const skippedCount = parseNonNegativeInt(getQueryValue(searchParams?.skipped))
+  const recurringAssignedCount = parseNonNegativeInt(getQueryValue(searchParams?.recurringAssigned))
 
   const [staffRows, upcomingShiftBaseRows, weekShiftRows, pendingTimeOffRows, pendingSwapRows] = await Promise.all([
     db.select({
@@ -1855,6 +1930,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           replaced={replacedCount}
           conflicts={conflictsCount}
           skipped={skippedCount}
+          recurringAssigned={recurringAssignedCount}
           dismissHref={`/admin${tabQuery}`}
         />
 

@@ -11,7 +11,6 @@ type ToastConfig = {
 
 const STATUS_MESSAGES: Record<string, ToastConfig> = {
   'shift-created': { tone: 'success', message: 'Shift created.' },
-  'shift-updated': { tone: 'success', message: 'Shift updated.' },
   'shift-cancelled': { tone: 'warning', message: 'Shift cancelled.' },
   'shift-restored': { tone: 'success', message: 'Shift restored to published.' },
   'schedule-published': { tone: 'success', message: 'Draft shifts were published.' },
@@ -75,14 +74,23 @@ type AdminToastProps = {
   replaced?: number
   conflicts?: number
   skipped?: number
+  recurringAssigned?: number
   dismissHref: string
 }
 
-export default function AdminToast({ status, error, count, replaced, conflicts, skipped, dismissHref }: AdminToastProps) {
+export default function AdminToast({ status, error, count, replaced, conflicts, skipped, recurringAssigned, dismissHref }: AdminToastProps) {
   let cfg: ToastConfig | null = null
 
   if (error && ERROR_MESSAGES[error]) {
     cfg = { tone: 'error', message: ERROR_MESSAGES[error] }
+  } else if (status === 'shift-updated') {
+    const r = recurringAssigned ?? 0
+    cfg = r > 0
+      ? {
+          tone: 'success',
+          message: `Shift updated. Also assigned to ${r} future matching shift${r === 1 ? '' : 's'}.`,
+        }
+      : { tone: 'success', message: 'Shift updated.' }
   } else if (status === 'standard-applied') {
     const n = count ?? 0
     const r = replaced ?? 0
