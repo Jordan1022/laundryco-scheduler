@@ -6,14 +6,16 @@
 
 @layer base {
   :root {
-    /* Paper & ink palette */
-    --paper: 38 36% 94%;           /* cream */
-    --ink: 221 52% 14%;            /* deep navy */
-    --ink-dim: 221 40% 24%;        /* dimmer navy for hover */
-    --ink-muted: 221 12% 40%;      /* warm grey-navy for meta */
-    --bleach: 45 52% 98%;          /* off-white card */
-    --cherry: 4 62% 48%;           /* ticket-stamp red */
-    --cherry-soft: 4 70% 94%;      /* red tint background */
+    /* Brand palette — hex values from BRAND.md, expressed as HSL for the token system */
+    --paper: 42 39% 94%;           /* brand-cream #F5F1E8 */
+    --ink: 211 61% 19%;            /* brand-navy #13304F */
+    --ink-dim: 211 50% 28%;        /* lighter navy for hover */
+    --ink-muted: 211 15% 42%;      /* warm grey-navy for meta */
+    --bleach: 42 50% 97%;          /* off-cream card */
+    --cherry: 6 66% 47%;           /* brand-red #C73A29 */
+    --cherry-soft: 6 70% 94%;      /* red tint background */
+    --sneaker-blue: 203 56% 44%;   /* brand-sneaker-blue #3180B0 (mascot-only) */
+    --gray-blue: 180 15% 78%;      /* brand-gray-blue #BFD0D0 (mascot body / soft neutral) */
     --sage: 95 16% 40%;            /* all-good green */
     --sage-soft: 95 28% 92%;       /* green tint background */
     --ochre: 36 66% 44%;           /* warning amber */

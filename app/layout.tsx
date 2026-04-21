@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { AuthProvider } from '@/components/auth-provider'
 import ThemeToggle from '@/components/ThemeToggle'
-import { serif, sans, mono } from '@/app/fonts'
+import { serif, sans, mono, script, display } from '@/app/fonts'
 
 export const metadata: Metadata = {
   title: 'Laundry Co. Shift Scheduler',
@@ -41,7 +41,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${serif.variable} ${sans.variable} ${mono.variable}`}
+      className={`${serif.variable} ${sans.variable} ${mono.variable} ${script.variable} ${display.variable}`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />

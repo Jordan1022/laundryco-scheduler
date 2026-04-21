@@ -13,6 +13,8 @@ const config: Config = {
         serif: ['var(--font-serif)', 'ui-serif', 'Georgia', 'serif'],
         sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        script: ['var(--font-script)', 'Pacifico', 'cursive'],
+        display: ['var(--font-display)', 'Ultra', 'Bungee', 'serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -39,6 +41,8 @@ const config: Config = {
           DEFAULT: "hsl(var(--ochre))",
           soft: "hsl(var(--ochre-soft))",
         },
+        "sneaker-blue": "hsl(var(--sneaker-blue))",
+        "gray-blue": "hsl(var(--gray-blue))",
         rule: "hsl(var(--rule))",
         primary: {
           DEFAULT: "hsl(var(--ink))",
