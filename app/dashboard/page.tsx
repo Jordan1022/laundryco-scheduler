@@ -6,11 +6,13 @@ import { db } from '@/lib/db'
 import { assignments, notifications, shiftSwapRequests, shifts, timeOffRequests, users } from '@/lib/schema'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Calendar, ChevronLeft, ChevronRight, Clock, Users } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import SignOutButton from '@/components/SignOutButton'
 import BrowserAlertToggle from '@/components/BrowserAlertToggle'
 import { DatePickerField } from '@/components/ui/date-time-picker'
+import { Brandmark } from '@/components/ui/Brandmark'
+import { TicketCard, TicketRow, Stamp } from '@/components/ui/TicketCard'
 import { markAllNotificationsRead, markNotificationRead, notifyRoles, notifyUsers } from '@/lib/notifications'
 import ScheduleGridWithModal from '@/components/ScheduleGridWithModal'
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
@@ -594,33 +596,35 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     ? monthLabel.format(monthStart)
     : `${monthDayLabel.format(selectedWeekStart)} - ${monthDayLabel.format(addDays(selectedWeekEnd, -1))}`
 
+  const nextShift = upcomingShiftRows[0]
+  const nextShiftDateParts = nextShift
+    ? {
+        weekday: new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(nextShift.startTime),
+        month: new Intl.DateTimeFormat('en-US', { month: 'short' }).format(nextShift.startTime).toUpperCase(),
+        day: nextShift.startTime.getDate(),
+        year: nextShift.startTime.getFullYear(),
+        startLabel: shortTimeLabel.format(nextShift.startTime),
+        endLabel: shortTimeLabel.format(nextShift.endTime),
+        ticketNo: String(nextShift.shiftId).slice(0, 6).toUpperCase(),
+      }
+    : null
+  const todayLong = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(now)
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="bg-card border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start sm:items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-[#1e3a8a] flex items-center justify-center">
-              <span className="text-white font-bold">LC</span>
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Laundry Co. Scheduler</h1>
-              <p className="text-sm text-muted-foreground">
-                Welcome back, {name}{canManageStaff ? ' • Employee view' : ''}
-              </p>
-            </div>
-          </div>
-          <div className="w-full sm:w-auto flex flex-wrap items-center justify-end gap-2 sm:gap-4">
-            <span className="text-sm font-medium capitalize bg-muted px-3 py-1 rounded-full">
-              {role}
-            </span>
+    <div className="relative min-h-screen">
+      <header className="relative border-b border-ink/15 bg-paper/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+          <Brandmark size="md" withWordmark subtitle={canManageStaff ? 'Employee view' : 'Staff workspace'} />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Stamp tone="muted">{role}</Stamp>
             {canManageStaff ? (
-              <Button asChild size="sm" className="bg-[#1e3a8a] hover:bg-[#172b6d]">
-                <Link href="/admin#requests">Open Admin Workspace</Link>
+              <Button asChild size="sm">
+                <Link href="/admin#requests">Admin office →</Link>
               </Button>
             ) : null}
             {role !== 'admin' ? (
               <Button asChild size="sm" variant="outline">
-                <Link href="/account/password">Change Password</Link>
+                <Link href="/account/password">Change password</Link>
               </Button>
             ) : null}
             <SignOutButton />
@@ -628,361 +632,390 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Upcoming Shifts</CardTitle>
-              <Calendar className="h-5 w-5 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold">{upcomingShiftCount}</div>
-              <p className="text-sm text-muted-foreground">Next 7 days</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Hours This Week</CardTitle>
-              <Clock className="h-5 w-5 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold">{formatHours(thisWeekHours)}</div>
-              <p className="text-sm text-muted-foreground">Scheduled this week</p>
-            </CardContent>
-          </Card>
-          {canManageStaff ? (
-            <Link href="/admin#staff-management" className="block">
-              <Card className="transition-colors hover:border-blue-300">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Team Members</CardTitle>
-                  <Users className="h-5 w-5 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl sm:text-3xl font-bold">{teamCount}</div>
-                  <p className="text-sm text-muted-foreground">Active users • Open staff management</p>
-                </CardContent>
-              </Card>
-            </Link>
-          ) : (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Team Members</CardTitle>
-                <Users className="h-5 w-5 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl sm:text-3xl font-bold">{teamCount}</div>
-                <p className="text-sm text-muted-foreground">Active users</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        <div className={cn('grid grid-cols-1 gap-8', selectedView === 'week' ? 'lg:grid-cols-1' : 'lg:grid-cols-3')}>
-          <div className={cn(selectedView === 'week' ? 'lg:col-span-1' : 'lg:col-span-2')}>
-            <Card id="schedule">
-              <CardHeader className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <CardTitle>Your Schedule</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Button asChild size="sm" variant={selectedView === 'week' ? 'default' : 'outline'}>
-                      <Link href={buildDashboardLink('week', anchorDate)}>Week</Link>
-                    </Button>
-                    <Button asChild size="sm" variant={selectedView === 'month' ? 'default' : 'outline'}>
-                      <Link href={buildDashboardLink('month', anchorDate)}>Month</Link>
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-2">
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={buildDashboardLink(selectedView, prevAnchor)}>
-                        <ChevronLeft className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={buildDashboardLink(selectedView, nextAnchor)}>
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                  <span className="text-sm font-medium text-center">{viewTitle}</span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {formStatus === 'calendar-shift-created' ? (
-                  <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-800">
-                    Shift added from calendar.
-                  </div>
-                ) : null}
-                {formError === 'calendar-missing-fields' ? (
-                  <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                    Date, start time, and end time are required.
-                  </div>
-                ) : null}
-                {formError === 'calendar-invalid-time' ? (
-                  <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                    Shift end time must be after start time.
-                  </div>
-                ) : null}
-                {formError === 'calendar-after-hours' ? (
-                  <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                    Store closes at 8:00 PM. Shifts must end by 8:00 PM.
-                  </div>
-                ) : null}
-                {formError === 'calendar-invalid-assignee' ? (
-                  <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                    The selected assignee does not exist.
-                  </div>
-                ) : null}
-                <ScheduleGridWithModal
-                  selectedView={selectedView}
-                  weekdayLabels={weekdayLabels}
-                  dayEntries={dayEntries}
-                  canManageStaff={canManageStaff}
-                  staffOptions={schedulableStaffRows}
-                  returnView={selectedView}
-                  returnDate={formatDateParam(anchorDate)}
-                  createShiftAction={canManageStaff ? createShiftFromCalendarAction : undefined}
-                />
-              </CardContent>
-            </Card>
+      <main className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+        <section className="mb-10 animate-reveal-up">
+          <div className="flex items-center justify-between border-b border-ink/20 pb-2">
+            <span className="stamp text-ink/70">{todayLong.toUpperCase()}</span>
+            <span className="stamp text-ink/50">Ticket No. {String(session.user.id).slice(0, 6).toUpperCase()}</span>
           </div>
-          <div className={cn(selectedView === 'week' ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'space-y-6')}>
-            <Card id="notifications">
-              <CardHeader className="space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle>Notifications</CardTitle>
-                  <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium">
-                    {unreadNotificationsCount} unread
+          <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+            <div className="space-y-2">
+              <h1 className="font-serif text-5xl leading-[0.95] tracking-tight text-ink md:text-6xl lg:text-7xl">
+                Hello, <span className="italic">{(name ?? 'friend').split(' ')[0]}</span>.
+              </h1>
+              <p className="max-w-md text-sm text-ink-muted">
+                {nextShift
+                  ? 'Your next ticket is stamped below. Take it easy until the wash cycle starts.'
+                  : 'No shifts on the books right now. Enjoy the dry spell — your manager will post more soon.'}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-4 text-sm">
+                <span className="flex items-baseline gap-2">
+                  <span className="font-mono text-3xl tabular text-ink">{upcomingShiftCount}</span>
+                  <span className="stamp text-ink/50">shifts · next 7 days</span>
+                </span>
+                <span className="flex items-baseline gap-2">
+                  <span className="font-mono text-3xl tabular text-ink">{formatHours(thisWeekHours)}</span>
+                  <span className="stamp text-ink/50">hrs this week</span>
+                </span>
+                {unreadNotificationsCount > 0 ? (
+                  <span className="flex items-baseline gap-2">
+                    <span className="font-mono text-3xl tabular text-cherry">{unreadNotificationsCount}</span>
+                    <span className="stamp text-ink/50">unread notes</span>
                   </span>
-                </div>
-                <BrowserAlertToggle vapidPublicKey={vapidPublicKey} />
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {notificationRows.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No notifications yet.</p>
-                ) : (
-                  <>
-                    {unreadNotificationsCount > 0 ? (
-                      <form action={markAllNotificationsReadAction} className="flex justify-end">
-                        <input type="hidden" name="returnView" value={selectedView} />
-                        <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
-                        <Button type="submit" size="sm" variant="outline">Mark All Read</Button>
-                      </form>
-                    ) : null}
-                    <div className="space-y-2">
-                      {notificationRows.map((notification) => (
-                        <div
-                          key={notification.id}
-                          className={cn(
-                            'rounded-md border p-3 space-y-2',
-                            notification.isRead ? 'bg-card' : 'bg-blue-50 border-blue-200',
-                          )}
-                        >
-                          <div className="space-y-1">
-                            <p className="text-sm font-semibold">{notification.title}</p>
-                            <p className="text-sm text-muted-foreground break-words">{notification.body}</p>
-                            <p className="text-xs text-muted-foreground">{dateTimeLabel.format(notification.createdAt)}</p>
-                          </div>
-                          <div className="flex flex-wrap items-center justify-end gap-2">
-                            {notification.link ? (
-                              <Button asChild size="sm" variant="outline">
-                                <Link href={notification.link}>Open</Link>
-                              </Button>
-                            ) : null}
-                            {!notification.isRead ? (
-                              <form action={markNotificationReadAction}>
-                                <input type="hidden" name="notificationId" value={notification.id} />
-                                <input type="hidden" name="returnView" value={selectedView} />
-                                <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
-                                <Button type="submit" size="sm" variant="outline">Mark Read</Button>
-                              </form>
-                            ) : null}
-                          </div>
-                        </div>
-                      ))}
+                ) : null}
+              </div>
+            </div>
+
+            {nextShiftDateParts ? (
+              <TicketCard tone="bleach" className="relative overflow-hidden p-0 animate-stamp-in">
+                <div className="flex items-stretch">
+                  <div className="flex w-24 flex-col items-center justify-center border-r border-dashed border-ink/25 bg-paper/60 py-5">
+                    <span className="stamp text-ink/60">{nextShiftDateParts.month}</span>
+                    <span className="font-serif text-5xl leading-none text-ink">{nextShiftDateParts.day}</span>
+                    <span className="stamp mt-1 text-ink/50">{nextShiftDateParts.year}</span>
+                  </div>
+                  <div className="flex-1 px-5 py-5">
+                    <div className="flex items-center justify-between">
+                      <span className="stamp text-ink/60">Your next shift</span>
+                      <Stamp tone="sage">Assigned</Stamp>
                     </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button asChild className="w-full" variant="outline">
-                  <Link href="#request-time-off">Request Time Off</Link>
-                </Button>
-                <Button asChild className="w-full" variant="outline">
-                  <Link href="#swap-shift">Swap a Shift</Link>
-                </Button>
-                <Button asChild className="w-full" variant="outline">
-                  <Link href={buildDashboardLink('week', now)}>
-                    Go To Today
-                  </Link>
-                </Button>
-                <Button asChild className="w-full" variant="outline">
-                  <Link href="/account/password">Change Password</Link>
-                </Button>
-                {canManageStaff ? (
-                  <Button asChild className="w-full" variant="outline">
-                    <Link href="/admin#staff-management">Manage Staff</Link>
-                  </Button>
-                ) : null}
-                {canManageStaff ? (
-                  <Button asChild className="w-full bg-[#1e3a8a] hover:bg-[#172b6d]">
-                    <Link href="/admin#create-shift">Create New Shift</Link>
-                  </Button>
-                ) : null}
-              </CardContent>
-            </Card>
-
-            <Card id="request-time-off">
-              <CardHeader>
-                <CardTitle>Request Time Off</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {formStatus === 'timeoff-submitted' ? (
-                  <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-800">
-                    Time-off request submitted for review.
+                    <p className="mt-2 font-serif text-xl text-ink">{nextShiftDateParts.weekday}</p>
+                    <p className="mt-1 font-mono text-2xl tabular text-ink">
+                      {nextShiftDateParts.startLabel} – {nextShiftDateParts.endLabel}
+                    </p>
+                    <p className="mt-1 text-xs text-ink-muted">{nextShift.location ?? 'Main store'}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="#swap-shift">Request swap</Link>
+                      </Button>
+                      <Button asChild size="sm" variant="ghost">
+                        <Link href="#request-time-off">Request time off</Link>
+                      </Button>
+                    </div>
                   </div>
-                ) : null}
-                {formError === 'invalid-timeoff-dates' ? (
-                  <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                    End date must be on or after start date.
-                  </div>
-                ) : null}
-                <form action={requestTimeOffAction} className="space-y-3">
+                </div>
+                <div className="flex items-center justify-between border-t border-dashed border-ink/25 bg-paper/60 px-5 py-2">
+                  <span className="stamp text-ink/50">No. {nextShiftDateParts.ticketNo}</span>
+                  <span className="stamp text-ink/50">Laundry Co. · Main Store</span>
+                </div>
+              </TicketCard>
+            ) : (
+              <TicketCard tone="bleach" className="flex items-center justify-center p-8 text-center">
+                <div>
+                  <Stamp tone="muted">All quiet</Stamp>
+                  <p className="mt-3 font-serif text-2xl text-ink">No shifts booked.</p>
+                  <p className="mt-1 text-xs text-ink-muted">Check back soon, or ask your manager.</p>
+                </div>
+              </TicketCard>
+            )}
+          </div>
+        </section>
+
+        <section id="schedule" className="mb-10">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <span className="stamp text-ink/60">Your schedule</span>
+              <p className="mt-1 font-serif text-2xl text-ink">{viewTitle}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex overflow-hidden rounded-sm border border-ink/25">
+                <Link
+                  href={buildDashboardLink('week', anchorDate)}
+                  className={cn(
+                    'stamp px-3 py-2 transition-colors',
+                    selectedView === 'week' ? 'bg-ink text-paper' : 'bg-transparent text-ink hover:bg-ink/5',
+                  )}
+                >
+                  Week
+                </Link>
+                <Link
+                  href={buildDashboardLink('month', anchorDate)}
+                  className={cn(
+                    'stamp px-3 py-2 border-l border-ink/25 transition-colors',
+                    selectedView === 'month' ? 'bg-ink text-paper' : 'bg-transparent text-ink hover:bg-ink/5',
+                  )}
+                >
+                  Month
+                </Link>
+              </div>
+              <Button asChild size="sm" variant="outline">
+                <Link href={buildDashboardLink(selectedView, prevAnchor)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link href={buildDashboardLink('week', now)}>Today</Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link href={buildDashboardLink(selectedView, nextAnchor)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          {formStatus === 'calendar-shift-created' ? (
+            <div className="mb-3 rounded-sm border border-sage/40 bg-sage-soft px-3 py-2 text-xs text-sage">
+              Shift added from calendar.
+            </div>
+          ) : null}
+          {formError && formError.startsWith('calendar-') ? (
+            <div className="mb-3 rounded-sm border border-cherry/40 bg-cherry-soft px-3 py-2 text-xs text-cherry">
+              {formError === 'calendar-missing-fields' && 'Date, start time, and end time are required.'}
+              {formError === 'calendar-invalid-time' && 'Shift end time must be after start time.'}
+              {formError === 'calendar-after-hours' && 'Store closes at 8:00 PM. Shifts must end by 8:00 PM.'}
+              {formError === 'calendar-invalid-assignee' && 'The selected assignee does not exist.'}
+            </div>
+          ) : null}
+
+          <TicketCard tone="bleach" className="p-4 md:p-6">
+            <ScheduleGridWithModal
+              selectedView={selectedView}
+              weekdayLabels={weekdayLabels}
+              dayEntries={dayEntries}
+              canManageStaff={canManageStaff}
+              staffOptions={schedulableStaffRows}
+              returnView={selectedView}
+              returnDate={formatDateParam(anchorDate)}
+              createShiftAction={canManageStaff ? createShiftFromCalendarAction : undefined}
+            />
+          </TicketCard>
+        </section>
+
+        <section id="notifications" className="mb-10">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <span className="stamp text-ink/60">Notices</span>
+              <p className="mt-1 font-serif text-2xl text-ink">The bulletin board</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {unreadNotificationsCount > 0 ? (
+                <Stamp tone="cherry">{unreadNotificationsCount} unread</Stamp>
+              ) : (
+                <Stamp tone="sage">All read</Stamp>
+              )}
+              {unreadNotificationsCount > 0 ? (
+                <form action={markAllNotificationsReadAction}>
                   <input type="hidden" name="returnView" value={selectedView} />
                   <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                  <Button type="submit" size="sm" variant="outline">Mark all read</Button>
+                </form>
+              ) : null}
+            </div>
+          </div>
+
+          <TicketCard tone="bleach" className="p-4 md:p-5">
+            <div className="mb-3 border-b border-dashed border-ink/15 pb-3">
+              <BrowserAlertToggle vapidPublicKey={vapidPublicKey} />
+            </div>
+
+            {notificationRows.length === 0 ? (
+              <p className="py-6 text-center text-sm text-ink-muted">No notices pinned up yet.</p>
+            ) : (
+              <ul className="divide-y divide-dashed divide-ink/15">
+                {notificationRows.map((notification) => (
+                  <li
+                    key={notification.id}
+                    className={cn(
+                      'flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between',
+                      !notification.isRead && 'bg-cherry-soft/40 -mx-2 px-2 rounded-sm',
+                    )}
+                  >
+                    <div className="flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {!notification.isRead ? <Stamp tone="cherry">New</Stamp> : null}
+                        <p className="text-sm font-semibold text-ink">{notification.title}</p>
+                      </div>
+                      <p className="text-sm text-ink-muted">{notification.body}</p>
+                      <p className="font-mono text-[10px] uppercase tracking-wider text-ink/50">
+                        {dateTimeLabel.format(notification.createdAt)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {notification.link ? (
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={notification.link}>Open</Link>
+                        </Button>
+                      ) : null}
+                      {!notification.isRead ? (
+                        <form action={markNotificationReadAction}>
+                          <input type="hidden" name="notificationId" value={notification.id} />
+                          <input type="hidden" name="returnView" value={selectedView} />
+                          <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                          <Button type="submit" size="sm" variant="ghost">Mark read</Button>
+                        </form>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </TicketCard>
+        </section>
+
+        <section className="mb-10 grid grid-cols-1 gap-8 lg:grid-cols-2">
+          <div id="request-time-off">
+            <div className="mb-3">
+              <span className="stamp text-ink/60">Form A · Time off</span>
+              <p className="mt-1 font-serif text-2xl text-ink">Day-off slip</p>
+            </div>
+            <TicketCard tone="bleach" className="p-5">
+              {formStatus === 'timeoff-submitted' ? (
+                <div className="mb-3 rounded-sm border border-sage/40 bg-sage-soft px-3 py-2 text-xs text-sage">
+                  Submitted for manager review.
+                </div>
+              ) : null}
+              {formError === 'invalid-timeoff-dates' ? (
+                <div className="mb-3 rounded-sm border border-cherry/40 bg-cherry-soft px-3 py-2 text-xs text-cherry">
+                  End date must be on or after start date.
+                </div>
+              ) : null}
+              <form action={requestTimeOffAction} className="space-y-4">
+                <input type="hidden" name="returnView" value={selectedView} />
+                <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label htmlFor="startDate" className="text-sm font-medium">Start Date</label>
+                    <label htmlFor="startDate" className="stamp text-ink/60">From</label>
                     <DatePickerField id="startDate" name="startDate" defaultValue={formatDateParam(now)} required />
                   </div>
                   <div className="space-y-1">
-                    <label htmlFor="endDate" className="text-sm font-medium">End Date</label>
+                    <label htmlFor="endDate" className="stamp text-ink/60">Through</label>
                     <DatePickerField id="endDate" name="endDate" defaultValue={formatDateParam(now)} required />
                   </div>
-                  <div className="space-y-1">
-                    <label htmlFor="reason" className="text-sm font-medium">Reason (Optional)</label>
-                    <textarea
-                      id="reason"
-                      name="reason"
-                      rows={3}
-                      className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      placeholder="Vacation, appointment, personal day..."
-                    />
-                  </div>
-                  <Button type="submit" className="w-full bg-[#1e3a8a] hover:bg-[#172b6d]">
-                    Submit Time-Off Request
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-
-            <Card id="swap-shift">
-              <CardHeader>
-                <CardTitle>Swap a Shift</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {formStatus === 'swap-submitted' ? (
-                  <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-800">
-                    Swap request submitted for manager approval.
-                  </div>
-                ) : null}
-                {formError === 'invalid-swap-request' ? (
-                  <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                    Choose a valid future shift and teammate.
-                  </div>
-                ) : null}
-                {formError === 'invalid-swap-target' ? (
-                  <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                    The requested teammate could not be found.
-                  </div>
-                ) : null}
-                {formError === 'swap-already-pending' ? (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
-                    A pending swap request already exists for that shift.
-                  </div>
-                ) : null}
-                {formError === 'swap-target-assigned' ? (
-                  <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-sm text-rose-800">
-                    That teammate is already assigned to the selected shift.
-                  </div>
-                ) : null}
-
-                {swapEligibleRows.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No upcoming assigned shifts available to swap.</p>
-                ) : coworkerRows.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No teammates available to request a swap with.</p>
-                ) : (
-                  <form action={requestSwapAction} className="space-y-3">
-                    <input type="hidden" name="returnView" value={selectedView} />
-                    <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
-                    <div className="space-y-1">
-                      <label htmlFor="assignmentId" className="text-sm font-medium">Your Shift</label>
-                      <select
-                        id="assignmentId"
-                        name="assignmentId"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        required
-                      >
-                        {swapEligibleRows.map((assignment) => (
-                          <option key={assignment.assignmentId} value={assignment.assignmentId}>
-                            {shortDateLabel.format(assignment.startTime)} {shortTimeLabel.format(assignment.startTime)}-{shortTimeLabel.format(assignment.endTime)} · {assignment.title}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label htmlFor="requestedUserId" className="text-sm font-medium">Swap With</label>
-                      <select
-                        id="requestedUserId"
-                        name="requestedUserId"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        required
-                      >
-                        {coworkerRows.map((coworker) => (
-                          <option key={coworker.id} value={coworker.id}>
-                            {coworker.name} ({coworker.role})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <Button type="submit" className="w-full bg-[#1e3a8a] hover:bg-[#172b6d]">
-                      Submit Swap Request
-                    </Button>
-                  </form>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Next 7 Days</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {upcomingShiftRows.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No assigned shifts in the next 7 days.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {upcomingShiftRows.map((shift) => (
-                      <div key={shift.shiftId} className="rounded-md border p-3 bg-card">
-                        <p className="font-medium">{shift.title}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {shortDateLabel.format(shift.startTime)} · {shortTimeLabel.format(shift.startTime)} - {shortTimeLabel.format(shift.endTime)}
-                        </p>
-                        {shift.location ? <p className="text-xs text-muted-foreground mt-1">{shift.location}</p> : null}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="reason" className="stamp text-ink/60">Reason (optional)</label>
+                  <textarea
+                    id="reason"
+                    name="reason"
+                    rows={3}
+                    className="flex w-full rounded-sm border border-ink/20 bg-paper/60 px-3 py-2 text-sm focus:border-ink focus:outline-none"
+                    placeholder="Vacation, appointment, personal day…"
+                  />
+                </div>
+                <Button type="submit" className="w-full">Submit time-off slip</Button>
+              </form>
+            </TicketCard>
           </div>
-        </div>
+
+          <div id="swap-shift">
+            <div className="mb-3">
+              <span className="stamp text-ink/60">Form B · Swap</span>
+              <p className="mt-1 font-serif text-2xl text-ink">Trade ticket</p>
+            </div>
+            <TicketCard tone="bleach" className="p-5">
+              {formStatus === 'swap-submitted' ? (
+                <div className="mb-3 rounded-sm border border-sage/40 bg-sage-soft px-3 py-2 text-xs text-sage">
+                  Swap submitted for manager approval.
+                </div>
+              ) : null}
+              {formError === 'invalid-swap-request' ? (
+                <div className="mb-3 rounded-sm border border-cherry/40 bg-cherry-soft px-3 py-2 text-xs text-cherry">
+                  Choose a valid future shift and teammate.
+                </div>
+              ) : null}
+              {formError === 'invalid-swap-target' ? (
+                <div className="mb-3 rounded-sm border border-cherry/40 bg-cherry-soft px-3 py-2 text-xs text-cherry">
+                  The requested teammate could not be found.
+                </div>
+              ) : null}
+              {formError === 'swap-already-pending' ? (
+                <div className="mb-3 rounded-sm border border-ochre/40 bg-ochre-soft px-3 py-2 text-xs text-ochre">
+                  A pending swap request already exists for that shift.
+                </div>
+              ) : null}
+              {formError === 'swap-target-assigned' ? (
+                <div className="mb-3 rounded-sm border border-cherry/40 bg-cherry-soft px-3 py-2 text-xs text-cherry">
+                  That teammate is already on the selected shift.
+                </div>
+              ) : null}
+
+              {swapEligibleRows.length === 0 ? (
+                <p className="text-sm text-ink-muted">No upcoming assigned shifts available to swap.</p>
+              ) : coworkerRows.length === 0 ? (
+                <p className="text-sm text-ink-muted">No teammates available to trade with.</p>
+              ) : (
+                <form action={requestSwapAction} className="space-y-4">
+                  <input type="hidden" name="returnView" value={selectedView} />
+                  <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                  <div className="space-y-1">
+                    <label htmlFor="assignmentId" className="stamp text-ink/60">Your shift</label>
+                    <select
+                      id="assignmentId"
+                      name="assignmentId"
+                      className="flex h-10 w-full rounded-sm border border-ink/20 bg-paper/60 px-3 py-2 text-sm focus:border-ink focus:outline-none"
+                      required
+                    >
+                      {swapEligibleRows.map((assignment) => (
+                        <option key={assignment.assignmentId} value={assignment.assignmentId}>
+                          {shortDateLabel.format(assignment.startTime)} · {shortTimeLabel.format(assignment.startTime)}–{shortTimeLabel.format(assignment.endTime)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="requestedUserId" className="stamp text-ink/60">Swap with</label>
+                    <select
+                      id="requestedUserId"
+                      name="requestedUserId"
+                      className="flex h-10 w-full rounded-sm border border-ink/20 bg-paper/60 px-3 py-2 text-sm focus:border-ink focus:outline-none"
+                      required
+                    >
+                      {coworkerRows.map((coworker) => (
+                        <option key={coworker.id} value={coworker.id}>
+                          {coworker.name} ({coworker.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <Button type="submit" className="w-full">Submit trade ticket</Button>
+                </form>
+              )}
+            </TicketCard>
+          </div>
+        </section>
+
+        <section className="mb-10">
+          <div className="mb-3 flex items-end justify-between">
+            <div>
+              <span className="stamp text-ink/60">Next seven days</span>
+              <p className="mt-1 font-serif text-2xl text-ink">Your tear-off calendar</p>
+            </div>
+            <Stamp tone="muted">{upcomingShiftRows.length} ticket{upcomingShiftRows.length === 1 ? '' : 's'}</Stamp>
+          </div>
+
+          {upcomingShiftRows.length === 0 ? (
+            <TicketCard tone="bleach" className="p-8 text-center">
+              <Stamp tone="sage">All quiet</Stamp>
+              <p className="mt-3 font-serif text-xl text-ink">No shifts this week.</p>
+              <p className="mt-1 text-xs text-ink-muted">Enjoy the dry spell.</p>
+            </TicketCard>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {upcomingShiftRows.map((shift) => {
+                const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(shift.startTime).toUpperCase()
+                const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(shift.startTime).toUpperCase()
+                return (
+                  <TicketCard key={shift.shiftId} tone="bleach" className="overflow-hidden p-0">
+                    <div className="flex items-stretch">
+                      <div className="flex w-20 flex-col items-center justify-center border-r border-dashed border-ink/25 bg-paper/60 py-3">
+                        <span className="stamp text-ink/60">{month}</span>
+                        <span className="font-serif text-3xl leading-none text-ink">{shift.startTime.getDate()}</span>
+                        <span className="stamp mt-1 text-ink/50">{weekday}</span>
+                      </div>
+                      <div className="flex-1 px-4 py-3">
+                        <p className="font-mono text-sm tabular text-ink">
+                          {shortTimeLabel.format(shift.startTime)} – {shortTimeLabel.format(shift.endTime)}
+                        </p>
+                        <p className="mt-1 text-xs text-ink-muted">{shift.location ?? 'Main store'}</p>
+                      </div>
+                    </div>
+                  </TicketCard>
+                )
+              })}
+            </div>
+          )}
+        </section>
       </main>
     </div>
   )

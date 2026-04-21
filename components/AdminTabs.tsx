@@ -18,9 +18,9 @@ export default function AdminTabs({ active, tabs }: AdminTabsProps) {
   return (
     <nav
       aria-label="Admin sections"
-      className="sticky top-0 z-20 -mx-4 border-b bg-background/95 px-4 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
+      className="sticky top-0 z-20 -mx-4 border-y border-ink/15 bg-paper/95 px-4 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
     >
-      <div className="flex gap-1 overflow-x-auto">
+      <div className="flex gap-0 overflow-x-auto">
         {tabs.map((tab) => {
           const isActive = tab.id === active
           return (
@@ -29,18 +29,18 @@ export default function AdminTabs({ active, tabs }: AdminTabsProps) {
               href={`/admin?tab=${tab.id}`}
               aria-current={isActive ? 'page' : undefined}
               className={cn(
-                'relative flex items-center gap-2 whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors',
+                'stamp relative flex items-center gap-2 whitespace-nowrap px-5 py-3 transition-colors',
                 isActive
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
+                  ? 'text-ink'
+                  : 'text-ink/50 hover:text-ink',
               )}
             >
               <span>{tab.label}</span>
               {typeof tab.badge === 'number' && tab.badge > 0 ? (
                 <span
                   className={cn(
-                    'inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-xs font-semibold',
-                    isActive ? 'bg-[#1e3a8a] text-white' : 'bg-muted text-muted-foreground',
+                    'inline-flex min-w-[1.25rem] items-center justify-center rounded-sm border border-dashed px-1.5 text-[10px] font-semibold',
+                    isActive ? 'border-cherry text-cherry' : 'border-ink/30 text-ink/60',
                   )}
                 >
                   {tab.badge}
@@ -48,8 +48,8 @@ export default function AdminTabs({ active, tabs }: AdminTabsProps) {
               ) : null}
               <span
                 className={cn(
-                  'absolute inset-x-2 -bottom-px h-0.5 rounded-full transition-colors',
-                  isActive ? 'bg-[#1e3a8a]' : 'bg-transparent',
+                  'absolute inset-x-3 -bottom-px h-0.5 transition-colors',
+                  isActive ? 'bg-ink' : 'bg-transparent',
                 )}
               />
             </Link>
