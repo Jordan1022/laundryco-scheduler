@@ -1997,11 +1997,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label htmlFor="startTime" className="text-sm font-medium">Start</label>
-                      <TimePickerField id="startTime" name="startTime" defaultValue="09:00" max="19:59" required />
+                      <TimePickerField id="startTime" name="startTime" defaultValue="16:00" max="19:59" required />
                     </div>
                     <div className="space-y-1.5">
                       <label htmlFor="endTime" className="text-sm font-medium">End</label>
-                      <TimePickerField id="endTime" name="endTime" defaultValue="17:00" max="20:00" required />
+                      <TimePickerField id="endTime" name="endTime" defaultValue="20:00" max="20:00" required />
                     </div>
                   </div>
                   <div className="space-y-1.5">
