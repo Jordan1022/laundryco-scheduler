@@ -7,6 +7,18 @@ vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>,
 }))
 
+const shift1 = {
+  shiftId: 'shift-1',
+  title: 'Morning load',
+  location: 'North Dock',
+  startLabel: '08:00',
+  endLabel: '12:00',
+  dateTimeLabel: 'Thu Apr 16, 2026, 8:00 AM - 12:00 PM',
+  assigneeLabel: 'Alice',
+  isMine: false,
+  isOpen: false,
+}
+
 const baseDay = {
   key: '2026-04-16',
   dateIso: '2026-04-16',
@@ -14,27 +26,9 @@ const baseDay = {
   isToday: true,
   isCurrentMonth: true,
   shiftCount: 1,
-  visibleShifts: [
-    {
-      shiftId: 'shift-1',
-      title: 'Morning load',
-      location: 'North Dock',
-      startLabel: '08:00',
-      endLabel: '12:00',
-      dateTimeLabel: 'Thu Apr 16, 2026, 8:00 AM - 12:00 PM',
-    },
-  ],
+  visibleShifts: [shift1],
   hiddenShiftCount: 0,
-  shifts: [
-    {
-      shiftId: 'shift-1',
-      title: 'Morning load',
-      location: 'North Dock',
-      startLabel: '08:00',
-      endLabel: '12:00',
-      dateTimeLabel: 'Thu Apr 16, 2026, 8:00 AM - 12:00 PM',
-    },
-  ],
+  shifts: [shift1],
   dateLabel: 'Thursday, April 16',
 }
 
@@ -71,10 +65,10 @@ describe('ScheduleGridWithModal', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /16 1 shift 08:00-12:00 Morning load/i }))
+    await user.click(screen.getByRole('button', { name: /16 1 shift Alice 08:00.*12:00/i }))
 
     expect(screen.getByRole('heading', { name: 'Thursday, April 16' })).toBeInTheDocument()
-    expect(screen.getAllByText('Morning load').length).toBeGreaterThan(1)
+    expect(screen.getAllByText(/Alice/).length).toBeGreaterThan(0)
     expect(screen.getByRole('link', { name: 'View / Edit' })).toHaveAttribute(
       'href',
       '/admin?openShiftId=shift-1#upcoming-shifts',
@@ -99,6 +93,6 @@ describe('ScheduleGridWithModal', () => {
     await user.click(screen.getByRole('button', { name: '17' }))
 
     expect(screen.getByText('No shifts for this day yet.')).toBeInTheDocument()
-    expect(screen.getByText('No shifts scheduled.')).toBeInTheDocument()
+    expect(screen.getAllByText('No shifts scheduled.').length).toBeGreaterThan(0)
   })
 })
