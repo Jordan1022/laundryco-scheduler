@@ -59,7 +59,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md animate-reveal-up">
           <div className="mb-6 flex items-center justify-between">
             <Brandmark size="md" withWordmark subtitle="Staff sign-in" />
-            <Stamp tone="muted">Est. 2026</Stamp>
+            <Stamp tone="muted">Est. 2025</Stamp>
           </div>
 
           <TicketCard tone="bleach" className="p-8">

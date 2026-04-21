@@ -14,7 +14,7 @@ export function Masthead({ eyebrow, title, subtitle, className, children }: Mast
     <header className={cn('relative', className)}>
       <div className="flex items-center justify-between gap-6 border-b border-ink/25 pb-2">
         <span className="stamp text-ink/70">{eyebrow}</span>
-        <span className="stamp text-ink/50">LC · EST 2026</span>
+        <span className="stamp text-ink/50">LC · EST 2025</span>
       </div>
       <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-1">
