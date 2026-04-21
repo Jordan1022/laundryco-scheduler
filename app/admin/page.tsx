@@ -37,6 +37,8 @@ const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'n
 const CLOSING_TIME_MINUTES = 20 * 60 // 8:00 PM
 const ACTIVE_ROLES = ['employee', 'manager', 'admin'] as const
 const DB_INSERT_CHUNK = 500
+// Users whose hours are excluded from "Week hours" totals (salaried, not hourly).
+const SALARIED_EMAILS = new Set(['joy@laundryco.store'])
 
 type ActiveRole = typeof ACTIVE_ROLES[number]
 
@@ -1798,10 +1800,24 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     if (shift.status === 'cancelled') return false
     return (assignedCountByShift.get(shift.id) ?? 0) === 0
   })
+  const salariedUserIds = new Set(
+    staffRows
+      .filter((staff) => SALARIED_EMAILS.has(staff.email.toLowerCase()))
+      .map((staff) => staff.id),
+  )
+  const payableAssignedCountByShift = new Map<string, number>()
+  for (const row of assignmentRows) {
+    if (row.status !== 'assigned') continue
+    if (salariedUserIds.has(row.userId)) continue
+    payableAssignedCountByShift.set(
+      row.shiftId,
+      (payableAssignedCountByShift.get(row.shiftId) ?? 0) + 1,
+    )
+  }
   const weekHours = weekShiftRows.reduce((total, shift) => {
     if (shift.status === 'cancelled') return total
     const durationHours = Math.max(0, (shift.endTime.getTime() - shift.startTime.getTime()) / (1000 * 60 * 60))
-    const assignedCount = assignedCountByShift.get(shift.id) ?? 0
+    const assignedCount = payableAssignedCountByShift.get(shift.id) ?? 0
     return total + (durationHours * assignedCount)
   }, 0)
 
@@ -1900,7 +1916,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <TicketCard tone="bleach" className="p-4">
             <span className="stamp text-ink/60">Week hours</span>
             <p className="mt-1 font-serif text-3xl leading-none text-ink tabular">{formatHours(weekHours)}</p>
-            <p className="stamp mt-2 text-ink/50">Assigned</p>
+            <p className="stamp mt-2 text-ink/50">Hourly staff</p>
           </TicketCard>
           <TicketCard tone="bleach" className="p-4">
             <span className="stamp text-ink/60">Unfilled</span>
