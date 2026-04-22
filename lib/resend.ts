@@ -8,6 +8,13 @@ type SendEmailInput = {
 const RESEND_API_URL = 'https://api.resend.com/emails'
 
 export async function sendEmailWithResend(input: SendEmailInput) {
+  // TEMP kill-switch: emails stay off until the new admin remove/cancel
+  // flow is validated. Set EMAIL_NOTIFICATIONS_ENABLED=true on Vercel to
+  // turn them back on. Delete this block once the flow is trusted.
+  if (process.env.EMAIL_NOTIFICATIONS_ENABLED !== 'true') {
+    return { sent: false as const, reason: 'disabled' as const }
+  }
+
   const apiKey = process.env.RESEND_API_KEY || process.env.RESEND_KEY
   const fromEmail = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM
 
