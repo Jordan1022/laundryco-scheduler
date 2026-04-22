@@ -85,6 +85,7 @@ export async function notifyUsers(entries: NotifyUserInput[]) {
     const user = byUserId.get(entry.userId)
     const link = absoluteLink(entry.link)
     const logoUrl = absoluteLink('/brand/email/wordmark-320.png')
+    const logoUrlDark = absoluteLink('/wordmark-variant-01--reversed.png')
 
     if (user?.email) {
       try {
@@ -97,6 +98,7 @@ export async function notifyUsers(entries: NotifyUserInput[]) {
             body: entry.body,
             link,
             logoUrl,
+            logoUrlDark,
           }),
         })
         if (!emailResult.sent && emailResult.reason === 'missing-config') {

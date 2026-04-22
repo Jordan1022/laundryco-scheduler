@@ -34,12 +34,17 @@ const artworkSizePx: Record<BrandmarkSize, number> = {
   xl: 160,
 }
 
-// Filenames map to actual files in /public/brand/. Add new variants as artwork lands.
-const variantSources: Record<Exclude<BrandmarkVariant, 'stamp'>, { src: string; alt: string; aspect: number }> = {
+// Filenames map to actual files in /public/brand/ (or /public/). Add new variants as artwork lands.
+const variantSources: Record<
+  Exclude<BrandmarkVariant, 'stamp'>,
+  { src: string; alt: string; aspect: number; srcDark?: string; aspectDark?: number }
+> = {
   'wordmark-leaguecity': {
     src: '/brand/wordmark-leaguecity-below-script.png',
+    srcDark: '/wordmark-variant-01--reversed.png',
     alt: 'The Laundry Co. — League City',
     aspect: 1.7,
+    aspectDark: 5025 / 3175,
   },
   mascot: {
     src: '/brand/mascot-washer-character.png',
@@ -58,6 +63,30 @@ export function Brandmark({
   if (variant !== 'stamp') {
     const meta = variantSources[variant]
     const heightPx = artworkSizePx[size]
+    if (meta.srcDark) {
+      const aspectDark = meta.aspectDark ?? meta.aspect
+      return (
+        <div className={cn('flex items-center gap-3', className)}>
+          <Image
+            src={meta.src}
+            alt={meta.alt}
+            width={Math.round(heightPx * meta.aspect)}
+            height={heightPx}
+            className={cn('w-auto object-contain dark:hidden', artworkSizeClasses[size])}
+            priority={size === 'lg' || size === 'xl'}
+          />
+          <Image
+            src={meta.srcDark}
+            alt={meta.alt}
+            width={Math.round(heightPx * aspectDark)}
+            height={heightPx}
+            className={cn('hidden w-auto object-contain dark:block', artworkSizeClasses[size])}
+            priority={size === 'lg' || size === 'xl'}
+          />
+          {withWordmark ? <BrandSubtitle subtitle={subtitle} /> : null}
+        </div>
+      )
+    }
     return (
       <div className={cn('flex items-center gap-3', className)}>
         <Image
