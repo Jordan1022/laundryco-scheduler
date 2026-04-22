@@ -80,7 +80,7 @@ export function Drawer({ trigger, title, description, children, initialOpen = fa
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            className="fixed inset-0 z-50 flex items-end justify-end sm:items-stretch"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
             <div
               className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
@@ -90,8 +90,7 @@ export function Drawer({ trigger, title, description, children, initialOpen = fa
             <div
               ref={panelRef}
               className={cn(
-                'relative flex w-full max-h-[92vh] flex-col rounded-t-2xl border-t bg-background shadow-xl',
-                'sm:h-full sm:max-h-none sm:w-[min(560px,100%)] sm:rounded-none sm:border-l sm:border-t-0'
+                'relative flex w-full max-w-[560px] max-h-[90vh] flex-col rounded-lg border bg-background shadow-xl'
               )}
             >
               <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
