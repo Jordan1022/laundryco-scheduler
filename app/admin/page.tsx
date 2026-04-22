@@ -25,6 +25,7 @@ import { CalendarDays, CalendarPlus, CheckSquare, Pencil, Phone, Plus, UserPlus 
 import SignOutButton from '@/components/SignOutButton'
 import bcrypt from 'bcryptjs'
 import { notifyUsers } from '@/lib/notifications'
+import { sendOnboardingEmail } from '@/lib/onboarding'
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
 import { BUSINESS_TZ, chicagoDateInputValue, chicagoTimeInputValue, parseChicagoWalltime } from '@/lib/time'
 import {
@@ -1149,6 +1150,106 @@ async function resetStaffPasswordAction(formData: FormData) {
   redirect('/admin?status=staff-password-reset#staff-management')
 }
 
+async function sendOnboardingEmailAction(formData: FormData) {
+  'use server'
+
+  await requireManagerSession()
+
+  const userId = String(formData.get('userId') ?? '')
+  if (!userId) {
+    redirect('/admin?error=onboarding-not-found#staff-management')
+  }
+
+  const [targetUser] = await db.select({
+    id: users.id,
+    name: users.name,
+    email: users.email,
+    role: users.role,
+  })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+
+  if (!targetUser || targetUser.role === 'inactive') {
+    redirect('/admin?error=onboarding-not-found#staff-management')
+  }
+
+  const result = await sendOnboardingEmail({
+    userId: targetUser.id,
+    name: targetUser.name,
+    email: targetUser.email,
+  })
+
+  if (!result.ok) {
+    const errorCode = result.reason === 'missing-email-config'
+      ? 'onboarding-email-not-configured'
+      : result.reason === 'not-found'
+        ? 'onboarding-not-found'
+        : 'onboarding-send-failed'
+    redirect(`/admin?error=${errorCode}#staff-management`)
+  }
+
+  redirect('/admin?status=onboarding-sent#staff-management')
+}
+
+async function sendBulkOnboardingEmailAction(formData: FormData) {
+  'use server'
+
+  await requireManagerSession()
+
+  const includeAlreadySent = formData.get('includeAlreadySent') === 'on'
+
+  const candidates = await db.select({
+    id: users.id,
+    name: users.name,
+    email: users.email,
+    onboardingEmailSentAt: users.onboardingEmailSentAt,
+  })
+    .from(users)
+    .where(inArray(users.role, [...ACTIVE_ROLES]))
+
+  const targets = includeAlreadySent
+    ? candidates
+    : candidates.filter((row) => row.onboardingEmailSentAt == null)
+
+  if (targets.length === 0) {
+    redirect('/admin?error=onboarding-bulk-empty#staff-management')
+  }
+
+  let sentCount = 0
+  let failedCount = 0
+  let missingConfig = false
+
+  // Send sequentially to keep the Resend request rate reasonable and so a single
+  // failure doesn't mask the count. Each send is independently persisted.
+  for (const target of targets) {
+    const result = await sendOnboardingEmail({
+      userId: target.id,
+      name: target.name,
+      email: target.email,
+    })
+    if (result.ok) {
+      sentCount += 1
+    } else {
+      failedCount += 1
+      if (result.reason === 'missing-email-config') {
+        missingConfig = true
+      }
+    }
+  }
+
+  if (sentCount === 0 && missingConfig) {
+    redirect('/admin?error=onboarding-email-not-configured#staff-management')
+  }
+
+  const params = new URLSearchParams({
+    status: 'onboarding-bulk-sent',
+    onboardingSent: String(sentCount),
+    onboardingFailed: String(failedCount),
+  })
+  redirect(`/admin?${params.toString()}#staff-management`)
+}
+
 async function reviewTimeOffAction(formData: FormData) {
   'use server'
 
@@ -1340,6 +1441,8 @@ type AdminPageProps = {
     conflicts?: string | string[]
     skipped?: string | string[]
     recurringAssigned?: string | string[]
+    onboardingSent?: string | string[]
+    onboardingFailed?: string | string[]
     openShiftId?: string | string[]
     openStaffId?: string | string[]
     tab?: string | string[]
@@ -1364,6 +1467,7 @@ type StaffRow = {
   email: string
   phone: string | null
   role: string
+  onboardingEmailSentAt: Date | null
 }
 
 function ShiftEditPopup({
@@ -1514,6 +1618,57 @@ function ShiftEditPopup({
   )
 }
 
+function BulkOnboardingPanel({
+  activeCount,
+  unsentCount,
+}: {
+  activeCount: number
+  unsentCount: number
+}) {
+  return (
+    <TicketCard tone="bleach" className="p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <span className="stamp text-ink/60">Onboarding emails</span>
+          <p className="font-serif text-2xl leading-tight text-ink">Welcome staff to the scheduler</p>
+          <p className="text-sm text-ink-muted">
+            Sends each active teammate a branded email with their sign-in info, a fresh temporary
+            password, and a short "save to your home screen" guide.
+          </p>
+          <p className="text-xs text-ink-muted">
+            <strong className="font-semibold">{unsentCount}</strong> of {activeCount} active
+            {activeCount === 1 ? ' teammate hasn’t' : ' teammates haven’t'} been onboarded yet.
+          </p>
+        </div>
+        <form action={sendBulkOnboardingEmailAction} className="flex flex-col items-end gap-2 sm:min-w-[14rem]">
+          <label className="flex items-center gap-2 text-xs text-ink-muted">
+            <input
+              type="checkbox"
+              name="includeAlreadySent"
+              className="h-3.5 w-3.5 rounded border-ink/30"
+            />
+            Include already-onboarded
+          </label>
+          <ConfirmSubmitButton
+            type="submit"
+            size="sm"
+            variant="outline"
+            disabled={activeCount === 0}
+            confirmTitle="Send onboarding to all?"
+            confirmMessage={
+              `Email every active staff member a welcome with a new temporary password. ` +
+              `This regenerates each recipient's password; any existing passwords will stop working.`
+            }
+            confirmLabel="Send to all"
+          >
+            Send to all staff
+          </ConfirmSubmitButton>
+        </form>
+      </div>
+    </TicketCard>
+  )
+}
+
 function StaffEditPopup({
   staff,
   currentUserId,
@@ -1616,6 +1771,38 @@ function StaffEditPopup({
           </form>
         )}
 
+        {staff.role !== 'inactive' ? (
+          <form action={sendOnboardingEmailAction} className="space-y-2 border-t pt-4">
+            <input type="hidden" name="userId" value={staff.id} />
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-sm font-semibold">Onboarding email</p>
+              {staff.onboardingEmailSentAt ? (
+                <span className="stamp text-ink/50">
+                  Sent {dateLabel.format(staff.onboardingEmailSentAt)}
+                </span>
+              ) : (
+                <span className="stamp text-cherry/70">Never sent</span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Emails {staff.name.split(' ')[0]} a welcome with sign-in info. This regenerates
+              a fresh temporary password &mdash; their current one will stop working.
+            </p>
+            <div className="flex justify-end">
+              <ConfirmSubmitButton
+                size="sm"
+                type="submit"
+                variant="outline"
+                confirmTitle={staff.onboardingEmailSentAt ? 'Resend onboarding email?' : 'Send onboarding email?'}
+                confirmMessage={`Email ${staff.name} (${staff.email}) a welcome with a new temporary password? Their current password will be replaced.`}
+                confirmLabel={staff.onboardingEmailSentAt ? 'Resend' : 'Send'}
+              >
+                {staff.onboardingEmailSentAt ? 'Resend onboarding email' : 'Send onboarding email'}
+              </ConfirmSubmitButton>
+            </div>
+          </form>
+        ) : null}
+
         <form action={resetStaffPasswordAction} className="space-y-3 border-t pt-4">
           <input type="hidden" name="userId" value={staff.id} />
           <p className="text-sm font-semibold">Reset password</p>
@@ -1673,6 +1860,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const conflictsCount = parseNonNegativeInt(getQueryValue(searchParams?.conflicts))
   const skippedCount = parseNonNegativeInt(getQueryValue(searchParams?.skipped))
   const recurringAssignedCount = parseNonNegativeInt(getQueryValue(searchParams?.recurringAssigned))
+  const onboardingSentCount = parseNonNegativeInt(getQueryValue(searchParams?.onboardingSent))
+  const onboardingFailedCount = parseNonNegativeInt(getQueryValue(searchParams?.onboardingFailed))
 
   const [staffRows, upcomingShiftBaseRows, weekShiftRows, pendingTimeOffRows, pendingSwapRows] = await Promise.all([
     db.select({
@@ -1681,6 +1870,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       email: users.email,
       phone: users.phone,
       role: users.role,
+      onboardingEmailSentAt: users.onboardingEmailSentAt,
     }).from(users).orderBy(users.name),
     db.select({
       id: shifts.id,
@@ -1989,6 +2179,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           conflicts={conflictsCount}
           skipped={skippedCount}
           recurringAssigned={recurringAssignedCount}
+          onboardingSent={onboardingSentCount}
+          onboardingFailed={onboardingFailedCount}
           dismissHref={`/admin${tabQuery}`}
         />
 
@@ -2421,6 +2613,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
         {activeTab === 'staff' ? (
           <div className="space-y-4">
+            <BulkOnboardingPanel
+              activeCount={activeStaff.length}
+              unsentCount={activeStaff.filter((row) => !row.onboardingEmailSentAt).length}
+            />
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold">Staff directory</h2>
@@ -2493,12 +2689,23 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             </span>
                           </div>
                           <p className="text-sm text-muted-foreground truncate">{staff.email}</p>
-                          {staff.phone ? (
-                            <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                              <Phone className="h-3 w-3" />
-                              {staff.phone}
-                            </p>
-                          ) : null}
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                            {staff.phone ? (
+                              <span className="flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {staff.phone}
+                              </span>
+                            ) : null}
+                            {staff.role !== 'inactive' ? (
+                              staff.onboardingEmailSentAt ? (
+                                <span className="stamp text-ink/50">
+                                  Onboarded {dateLabel.format(staff.onboardingEmailSentAt)}
+                                </span>
+                              ) : (
+                                <span className="stamp text-cherry/70">Onboarding not sent</span>
+                              )
+                            ) : null}
+                          </div>
                         </div>
                         <div className="shrink-0">
                           <StaffEditPopup
