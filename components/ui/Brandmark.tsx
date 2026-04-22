@@ -48,6 +48,7 @@ const variantSources: Record<
   },
   mascot: {
     src: '/brand/mascot-washer-character.png',
+    srcDark: '/mascot-washer-character--reversed.png',
     alt: 'Laundry Co. mascot',
     aspect: 0.93,
   },
