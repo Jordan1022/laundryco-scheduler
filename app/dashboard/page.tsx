@@ -23,6 +23,10 @@ const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: BUSINESS_TZ })
 const monthDayLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
 const shortDateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
+// Calendar-day labels come from Dates built with local constructors (parseDateParam, addDays).
+// Formatting them with a fixed timeZone reinterprets a local-midnight instant and rolls the day
+// when server TZ differs from BUSINESS_TZ — use a naive formatter to match the source instead.
+const calendarDayLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 const shortTimeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
 const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
 const CLOSING_TIME_MINUTES = 20 * 60 // 8:00 PM
@@ -778,7 +782,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       visibleShifts: compactShifts.slice(0, maxDayShiftsVisible),
       hiddenShiftCount: Math.max(0, compactShifts.length - maxDayShiftsVisible),
       shifts: compactShifts,
-      dateLabel: shortDateLabel.format(day),
+      dateLabel: calendarDayLabel.format(day),
     }
   })
 
@@ -1124,7 +1128,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <div id="swap-shift">
             <div className="mb-3">
               <span className="stamp text-ink/60">Form B · Swap</span>
-              <p className="mt-1 font-serif text-2xl text-ink">Trade ticket</p>
+              <p className="mt-1 font-serif text-2xl text-ink">Trade shift</p>
             </div>
             <TicketCard tone="bleach" className="p-5">
               {formStatus === 'swap-submitted' ? (
@@ -1191,7 +1195,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       ))}
                     </select>
                   </div>
-                  <Button type="submit" className="w-full">Submit trade ticket</Button>
+                  <Button type="submit" className="w-full">Submit trade request</Button>
                 </form>
               )}
             </TicketCard>
@@ -1204,7 +1208,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <span className="stamp text-ink/60">Next seven days</span>
               <p className="mt-1 font-serif text-2xl text-ink">Your tear-off calendar</p>
             </div>
-            <Stamp tone="muted">{upcomingShiftRows.length} ticket{upcomingShiftRows.length === 1 ? '' : 's'}</Stamp>
+            <Stamp tone="muted">{upcomingShiftRows.length} shift{upcomingShiftRows.length === 1 ? '' : 's'}</Stamp>
           </div>
 
           {upcomingShiftRows.length === 0 ? (

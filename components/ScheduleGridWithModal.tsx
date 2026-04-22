@@ -315,8 +315,8 @@ export default function ScheduleGridWithModal({
                 type="submit"
                 size="sm"
                 variant="outline"
-                confirmTitle="Remove person from this ticket?"
-                confirmMessage={`Remove ${activeShiftContext.shift.assigneeLabel} from the ${activeShiftContext.shift.startLabel} – ${activeShiftContext.shift.endLabel} ticket on ${activeShiftContext.day.dateLabel}? They'll be notified. The slot stays open.`}
+                confirmTitle="Remove person from this shift?"
+                confirmMessage={`Remove ${activeShiftContext.shift.assigneeLabel} from the ${activeShiftContext.shift.startLabel} – ${activeShiftContext.shift.endLabel} shift on ${activeShiftContext.day.dateLabel}? They'll be notified. The slot stays open.`}
                 confirmLabel="Remove"
               >
                 Remove {activeShiftContext.shift.assigneeLabel}
@@ -335,21 +335,21 @@ export default function ScheduleGridWithModal({
               <input type="hidden" name="shiftId" value={activeShiftContext.shift.shiftId} />
               <input type="hidden" name="mode" value="cancel" />
               <p className="text-xs text-ink-muted">
-                Cancels this one ticket. Other tickets at the same time aren&rsquo;t affected.
+                Cancels this one shift. Other shifts at the same time aren&rsquo;t affected.
               </p>
               <ConfirmSubmitButton
                 type="submit"
                 size="sm"
                 variant="destructive"
                 tone="destructive"
-                confirmTitle="Cancel this shift ticket?"
+                confirmTitle="Cancel this shift?"
                 confirmMessage={
                   activeShiftContext.shift.isOpen
-                    ? `Cancel this open ${activeShiftContext.shift.startLabel} – ${activeShiftContext.shift.endLabel} ticket on ${activeShiftContext.day.dateLabel}? Other tickets at the same time aren't affected.`
-                    : `Cancel ${activeShiftContext.shift.assigneeLabel}'s ${activeShiftContext.shift.startLabel} – ${activeShiftContext.shift.endLabel} ticket on ${activeShiftContext.day.dateLabel}? ${activeShiftContext.shift.assigneeLabel} will be notified. Other tickets at the same time aren't affected.`
+                    ? `Cancel this open ${activeShiftContext.shift.startLabel} – ${activeShiftContext.shift.endLabel} shift on ${activeShiftContext.day.dateLabel}? Other shifts at the same time aren't affected.`
+                    : `Cancel ${activeShiftContext.shift.assigneeLabel}'s ${activeShiftContext.shift.startLabel} – ${activeShiftContext.shift.endLabel} shift on ${activeShiftContext.day.dateLabel}? ${activeShiftContext.shift.assigneeLabel} will be notified. Other shifts at the same time aren't affected.`
                 }
-                confirmLabel="Cancel ticket"
-                cancelLabel="Keep ticket"
+                confirmLabel="Cancel shift"
+                cancelLabel="Keep shift"
               >
                 Cancel this shift
               </ConfirmSubmitButton>
@@ -376,7 +376,7 @@ export default function ScheduleGridWithModal({
               <p className="stamp text-ink/60">{createDay.dateLabel}</p>
               <h3 className="font-serif text-2xl leading-tight text-ink">Add a shift</h3>
               <p className="mt-1 text-xs text-ink-muted">
-                Shift type and location are fixed. Optionally pre-assign someone.
+                Shift type and location are fixed. Choose someone to assign, or leave it unassigned.
               </p>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={() => setCreateDayKey(null)}>
@@ -413,14 +413,14 @@ export default function ScheduleGridWithModal({
               />
             </div>
             <div className="space-y-1">
-              <label htmlFor="calendar-shift-assignee" className="text-sm font-medium">Pre-assign (optional)</label>
+              <label htmlFor="calendar-shift-assignee" className="text-sm font-medium">Assign to</label>
               <select
                 id="calendar-shift-assignee"
                 name="assignedUserId"
                 defaultValue=""
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="">Leave open</option>
+                <option value="">Unassigned (leave open)</option>
                 {staffOptions.map((staff) => (
                   <option key={staff.id} value={staff.id}>
                     {staff.name} ({staff.role})

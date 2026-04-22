@@ -1490,24 +1490,24 @@ function ShiftEditPopup({
           size="sm"
           variant={shift.status === 'cancelled' ? 'outline' : 'destructive'}
           tone={shift.status === 'cancelled' ? 'default' : 'destructive'}
-          confirmTitle={shift.status === 'cancelled' ? 'Restore this ticket?' : 'Cancel this ticket?'}
-          confirmLabel={shift.status === 'cancelled' ? 'Restore' : 'Cancel ticket'}
-          cancelLabel={shift.status === 'cancelled' ? 'Keep cancelled' : 'Keep ticket'}
+          confirmTitle={shift.status === 'cancelled' ? 'Restore this shift?' : 'Cancel this shift?'}
+          confirmLabel={shift.status === 'cancelled' ? 'Restore' : 'Cancel shift'}
+          cancelLabel={shift.status === 'cancelled' ? 'Keep cancelled' : 'Keep shift'}
           confirmMessage={(() => {
             const assigneeName = staff.find((s) => s.id === assignedUserId)?.name
             const timeSpan = `${timeLabel.format(shift.startTime)} – ${timeLabel.format(shift.endTime)}`
             const date = dateLabel.format(shift.startTime)
             if (shift.status === 'cancelled') {
               return assigneeName
-                ? `Restore ${assigneeName}'s ${timeSpan} ticket on ${date}? ${assigneeName} will be notified.`
-                : `Restore this ${timeSpan} ticket on ${date}?`
+                ? `Restore ${assigneeName}'s ${timeSpan} shift on ${date}? ${assigneeName} will be notified.`
+                : `Restore this ${timeSpan} shift on ${date}?`
             }
             return assigneeName
-              ? `Cancel ${assigneeName}'s ${timeSpan} ticket on ${date}? ${assigneeName} will be notified. Other tickets at the same time aren't affected.`
-              : `Cancel this open ${timeSpan} ticket on ${date}? Other tickets at the same time aren't affected.`
+              ? `Cancel ${assigneeName}'s ${timeSpan} shift on ${date}? ${assigneeName} will be notified. Other shifts at the same time aren't affected.`
+              : `Cancel this open ${timeSpan} shift on ${date}? Other shifts at the same time aren't affected.`
           })()}
         >
-          {shift.status === 'cancelled' ? 'Restore ticket' : 'Cancel this ticket'}
+          {shift.status === 'cancelled' ? 'Restore shift' : 'Cancel this shift'}
         </ConfirmSubmitButton>
       </PopupForm>
     </Popup>
@@ -2089,8 +2089,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <div>
               <span className="stamp text-ink/60">Shifts ledger</span>
-              <p className="mt-1 font-serif text-2xl text-ink">Upcoming tickets</p>
-              <p className="mt-1 text-sm text-ink-muted">Tap a ticket to edit, reassign, or cancel.</p>
+              <p className="mt-1 font-serif text-2xl text-ink">Upcoming shifts</p>
+              <p className="mt-1 text-sm text-ink-muted">Tap a shift to edit, reassign, or cancel.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Popup
@@ -2216,7 +2216,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </div>
               {upcomingShiftRows.length === 0 ? (
                 <TicketCard tone="bleach" className="p-10 text-center">
-                  <Stamp tone="muted">No tickets</Stamp>
+                  <Stamp tone="muted">No shifts</Stamp>
                   <p className="mt-3 font-serif text-xl text-ink">No upcoming shifts yet.</p>
                   <p className="mt-1 text-xs text-ink-muted">Use Standard Schedule or New Shift to start filling the week.</p>
                 </TicketCard>
@@ -2224,7 +2224,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <TicketCard tone="bleach" className="p-10 text-center">
                   <Stamp tone="muted">Nothing here</Stamp>
                   <p className="mt-3 font-serif text-xl text-ink">No shifts match this filter.</p>
-                  <p className="mt-1 text-xs text-ink-muted">Switch the filter above to see more tickets.</p>
+                  <p className="mt-1 text-xs text-ink-muted">Switch the filter above to see more shifts.</p>
                 </TicketCard>
               ) : (
                 displayedUpcomingShiftRows.map((shift) => {
