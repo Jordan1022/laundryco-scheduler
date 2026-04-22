@@ -822,11 +822,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <Link href="/admin#requests">Admin office →</Link>
               </Button>
             ) : null}
-            {role !== 'admin' ? (
-              <Button asChild size="sm" variant="outline">
-                <Link href="/account/password">Change password</Link>
-              </Button>
-            ) : null}
+            <Button asChild size="sm" variant="outline">
+              <Link href="/account/password">Change password</Link>
+            </Button>
             <SignOutButton />
           </div>
         </div>

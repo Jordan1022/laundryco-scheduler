@@ -1906,6 +1906,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <Button asChild variant="outline" size="sm">
               <Link href="/dashboard">← Team view</Link>
             </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/account/password">Change password</Link>
+            </Button>
             <SignOutButton />
           </div>
         </div>
