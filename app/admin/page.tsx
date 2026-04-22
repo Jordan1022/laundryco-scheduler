@@ -1633,7 +1633,7 @@ function BulkOnboardingPanel({
           <p className="font-serif text-2xl leading-tight text-ink">Welcome staff to the scheduler</p>
           <p className="text-sm text-ink-muted">
             Sends each active teammate a branded email with their sign-in info, a fresh temporary
-            password, and a short "save to your home screen" guide.
+            password, and a short &ldquo;save to your home screen&rdquo; guide.
           </p>
           <p className="text-xs text-ink-muted">
             <strong className="font-semibold">{unsentCount}</strong> of {activeCount} active
