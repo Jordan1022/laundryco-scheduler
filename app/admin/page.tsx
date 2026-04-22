@@ -1406,6 +1406,9 @@ function ShiftEditPopup({
               </option>
             ))}
           </select>
+          <p className="text-xs text-muted-foreground">
+            Change or clear the assignee. They&rsquo;ll be notified if removed. The shift slot stays open.
+          </p>
           <label className="mt-2 flex items-start gap-2 rounded-sm border border-dashed border-ink/30 p-3 text-sm">
             <input
               type="checkbox"
@@ -1486,13 +1489,25 @@ function ShiftEditPopup({
           type="submit"
           size="sm"
           variant={shift.status === 'cancelled' ? 'outline' : 'destructive'}
-          confirmMessage={
-            shift.status === 'cancelled'
-              ? `Restore ${shift.title} on ${dateLabel.format(shift.startTime)}?`
-              : `Cancel ${shift.title} on ${dateLabel.format(shift.startTime)}? Assigned staff will be notified.`
-          }
+          tone={shift.status === 'cancelled' ? 'default' : 'destructive'}
+          confirmTitle={shift.status === 'cancelled' ? 'Restore this ticket?' : 'Cancel this ticket?'}
+          confirmLabel={shift.status === 'cancelled' ? 'Restore' : 'Cancel ticket'}
+          cancelLabel={shift.status === 'cancelled' ? 'Keep cancelled' : 'Keep ticket'}
+          confirmMessage={(() => {
+            const assigneeName = staff.find((s) => s.id === assignedUserId)?.name
+            const timeSpan = `${timeLabel.format(shift.startTime)} – ${timeLabel.format(shift.endTime)}`
+            const date = dateLabel.format(shift.startTime)
+            if (shift.status === 'cancelled') {
+              return assigneeName
+                ? `Restore ${assigneeName}'s ${timeSpan} ticket on ${date}? ${assigneeName} will be notified.`
+                : `Restore this ${timeSpan} ticket on ${date}?`
+            }
+            return assigneeName
+              ? `Cancel ${assigneeName}'s ${timeSpan} ticket on ${date}? ${assigneeName} will be notified. Other tickets at the same time aren't affected.`
+              : `Cancel this open ${timeSpan} ticket on ${date}? Other tickets at the same time aren't affected.`
+          })()}
         >
-          {shift.status === 'cancelled' ? 'Restore Shift' : 'Cancel Shift'}
+          {shift.status === 'cancelled' ? 'Restore ticket' : 'Cancel this ticket'}
         </ConfirmSubmitButton>
       </PopupForm>
     </Popup>

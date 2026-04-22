@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { TimePickerField } from '@/components/ui/date-time-picker'
+import ConfirmSubmitButton from '@/components/ConfirmSubmitButton'
 import { cn } from '@/lib/utils'
 
 type DayShift = {
@@ -49,6 +50,7 @@ type ScheduleGridWithModalProps = {
   returnDate: string
   createShiftAction?: (formData: FormData) => void | Promise<void>
   assignShiftAction?: (formData: FormData) => void | Promise<void>
+  cancelShiftAction?: (formData: FormData) => void | Promise<void>
 }
 
 type ActiveShift = { dayKey: string; shiftId: string }
@@ -63,6 +65,7 @@ export default function ScheduleGridWithModal({
   returnDate,
   createShiftAction,
   assignShiftAction,
+  cancelShiftAction,
 }: ScheduleGridWithModalProps) {
   const [activeShift, setActiveShift] = useState<ActiveShift | null>(null)
   const [createDayKey, setCreateDayKey] = useState<string | null>(null)
@@ -279,7 +282,9 @@ export default function ScheduleGridWithModal({
                   defaultValue={activeShiftContext.shift.assignedUserId ?? ''}
                   className="flex h-9 w-full rounded-sm border border-input bg-background px-2 text-sm text-ink"
                 >
-                  <option value="">{activeShiftContext.shift.isOpen ? 'Unassigned' : 'Unassign'}</option>
+                  {activeShiftContext.shift.isOpen ? (
+                    <option value="">Unassigned</option>
+                  ) : null}
                   {staffOptions.map((staff) => (
                     <option key={staff.id} value={staff.id}>
                       {staff.name} ({staff.role})
@@ -293,11 +298,69 @@ export default function ScheduleGridWithModal({
             </form>
           ) : null}
 
+          {canManageStaff && assignShiftAction && !activeShiftContext.shift.isOpen ? (
+            <form
+              action={assignShiftAction}
+              onSubmit={() => setActiveShift(null)}
+              className="mt-3 flex items-center justify-between gap-3 rounded-sm border border-dashed border-ink/20 bg-paper/40 px-3 py-2"
+            >
+              <input type="hidden" name="returnView" value={returnView} />
+              <input type="hidden" name="returnDate" value={returnDate} />
+              <input type="hidden" name="shiftId" value={activeShiftContext.shift.shiftId} />
+              <input type="hidden" name="assignedUserId" value="" />
+              <p className="text-xs text-ink-muted">
+                Remove <span className="font-medium text-ink">{activeShiftContext.shift.assigneeLabel}</span> but keep the slot open for someone else.
+              </p>
+              <ConfirmSubmitButton
+                type="submit"
+                size="sm"
+                variant="outline"
+                confirmTitle="Remove person from this ticket?"
+                confirmMessage={`Remove ${activeShiftContext.shift.assigneeLabel} from the ${activeShiftContext.shift.startLabel} – ${activeShiftContext.shift.endLabel} ticket on ${activeShiftContext.day.dateLabel}? They'll be notified. The slot stays open.`}
+                confirmLabel="Remove"
+              >
+                Remove {activeShiftContext.shift.assigneeLabel}
+              </ConfirmSubmitButton>
+            </form>
+          ) : null}
+
+          {canManageStaff && cancelShiftAction ? (
+            <form
+              action={cancelShiftAction}
+              onSubmit={() => setActiveShift(null)}
+              className="mt-4 flex items-center justify-between gap-3 border-t border-dashed border-ink/20 pt-4"
+            >
+              <input type="hidden" name="returnView" value={returnView} />
+              <input type="hidden" name="returnDate" value={returnDate} />
+              <input type="hidden" name="shiftId" value={activeShiftContext.shift.shiftId} />
+              <input type="hidden" name="mode" value="cancel" />
+              <p className="text-xs text-ink-muted">
+                Cancels this one ticket. Other tickets at the same time aren't affected.
+              </p>
+              <ConfirmSubmitButton
+                type="submit"
+                size="sm"
+                variant="destructive"
+                tone="destructive"
+                confirmTitle="Cancel this shift ticket?"
+                confirmMessage={
+                  activeShiftContext.shift.isOpen
+                    ? `Cancel this open ${activeShiftContext.shift.startLabel} – ${activeShiftContext.shift.endLabel} ticket on ${activeShiftContext.day.dateLabel}? Other tickets at the same time aren't affected.`
+                    : `Cancel ${activeShiftContext.shift.assigneeLabel}'s ${activeShiftContext.shift.startLabel} – ${activeShiftContext.shift.endLabel} ticket on ${activeShiftContext.day.dateLabel}? ${activeShiftContext.shift.assigneeLabel} will be notified. Other tickets at the same time aren't affected.`
+                }
+                confirmLabel="Cancel ticket"
+                cancelLabel="Keep ticket"
+              >
+                Cancel this shift
+              </ConfirmSubmitButton>
+            </form>
+          ) : null}
+
           {canManageStaff ? (
             <div className="mt-4 border-t border-dashed border-ink/20 pt-3 text-right">
               <Button asChild size="sm" variant="outline">
                 <Link href={`/admin?openShiftId=${activeShiftContext.shift.shiftId}#upcoming-shifts`}>
-                  Edit time, notes, or cancel →
+                  Edit time or notes →
                 </Link>
               </Button>
             </div>

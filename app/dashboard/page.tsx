@@ -483,6 +483,58 @@ async function assignShiftFromCalendarAction(formData: FormData) {
   }))
 }
 
+async function cancelShiftFromCalendarAction(formData: FormData) {
+  'use server'
+
+  const session = await requireAuthenticatedSession()
+  const { returnView, returnDate } = getReturnContext(formData)
+
+  if (session.user.role !== 'manager' && session.user.role !== 'admin') {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-not-authorized', hash: 'schedule' }))
+  }
+
+  const shiftId = String(formData.get('shiftId') ?? '')
+  const mode = String(formData.get('mode') ?? 'cancel')
+  if (!shiftId || (mode !== 'cancel' && mode !== 'restore')) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-invalid-shift', hash: 'schedule' }))
+  }
+
+  const [shiftRow] = await db.select({
+    id: shifts.id,
+    title: shifts.title,
+    startTime: shifts.startTime,
+    endTime: shifts.endTime,
+  }).from(shifts).where(eq(shifts.id, shiftId)).limit(1)
+
+  if (!shiftRow) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-invalid-shift', hash: 'schedule' }))
+  }
+
+  const assignedRows = await db.select({ userId: assignments.userId })
+    .from(assignments)
+    .where(and(eq(assignments.shiftId, shiftId), eq(assignments.status, 'assigned')))
+
+  const status = mode === 'cancel' ? 'cancelled' : 'published'
+  await db.update(shifts).set({
+    status,
+    updatedAt: new Date(),
+  }).where(eq(shifts.id, shiftId))
+
+  if (assignedRows.length > 0) {
+    await notifyUsers(assignedRows.map((row) => ({
+      userId: row.userId,
+      title: mode === 'cancel' ? 'Shift cancelled' : 'Shift restored',
+      body: `${shiftRow.title} (${formatShiftDateTime(shiftRow.startTime, shiftRow.endTime)}) has been ${mode === 'cancel' ? 'cancelled' : 'restored'}.`,
+      link: '/dashboard',
+    })))
+  }
+
+  redirect(buildDashboardReturnUrl(returnView, returnDate, {
+    status: mode === 'cancel' ? 'calendar-shift-cancelled' : 'calendar-shift-restored',
+    hash: 'schedule',
+  }))
+}
+
 async function dismissNotificationAction(formData: FormData) {
   'use server'
 
@@ -934,6 +986,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               returnDate={formatDateParam(anchorDate)}
               createShiftAction={canManageStaff ? createShiftFromCalendarAction : undefined}
               assignShiftAction={canManageStaff ? assignShiftFromCalendarAction : undefined}
+              cancelShiftAction={canManageStaff ? cancelShiftFromCalendarAction : undefined}
             />
           </TicketCard>
         </section>
