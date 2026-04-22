@@ -2,13 +2,11 @@
 // Uses table-based layout + inline styles (standard for email clients).
 // Brand colors per BRAND.md: cream #F5F1E8, navy #13304F, red #C73A29.
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-
 type RenderInput = {
   title: string
   body: string
   link?: string
+  logoUrl?: string
   eyebrow?: string
   ctaLabel?: string
 }
@@ -22,38 +20,25 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;')
 }
 
-// Inline the wordmark as a data URI so the logo renders regardless of where
-// APP_BASE_URL points. Read once at module load time and cache.
-let cachedLogoDataUri: string | null = null
-function getLogoDataUri(): string | null {
-  if (cachedLogoDataUri !== null) return cachedLogoDataUri
-  try {
-    const path = join(process.cwd(), 'public', 'brand', 'email', 'wordmark-320.png')
-    const buffer = readFileSync(path)
-    cachedLogoDataUri = `data:image/png;base64,${buffer.toString('base64')}`
-    return cachedLogoDataUri
-  } catch {
-    cachedLogoDataUri = ''
-    return null
-  }
-}
-
 export function renderNotificationEmail({
   title,
   body,
   link,
+  logoUrl,
   eyebrow = 'Laundry Co. · Shift ticket office',
   ctaLabel = 'Open scheduler',
 }: RenderInput): string {
-  const logoDataUri = getLogoDataUri()
   const safeTitle = escapeHtml(title)
   const safeBody = escapeHtml(body).replace(/\n/g, '<br>')
   const safeEyebrow = escapeHtml(eyebrow)
   const safeLink = link ? escapeHtml(link) : null
   const safeCtaLabel = escapeHtml(ctaLabel)
+  // Gmail strips data: URIs from <img src>, so the logo must be a hosted
+  // HTTPS URL. Fall back to a styled text wordmark if no URL is provided.
+  const safeLogoUrl = logoUrl && /^https?:\/\//i.test(logoUrl) ? escapeHtml(logoUrl) : null
 
-  const logoCell = logoDataUri
-    ? `<img src="${logoDataUri}" alt="The Laundry Co. — League City" width="240" style="display:block;width:240px;height:auto;max-width:240px;border:0;outline:none;text-decoration:none;">`
+  const logoCell = safeLogoUrl
+    ? `<img src="${safeLogoUrl}" alt="The Laundry Co. — League City" width="240" style="display:block;width:240px;height:auto;max-width:240px;border:0;outline:none;text-decoration:none;">`
     : `<div style="font-family:Georgia,'Times New Roman',serif;font-size:30px;color:#13304F;letter-spacing:-0.01em;">The Laundry Co.</div>`
 
   const ctaRow = safeLink

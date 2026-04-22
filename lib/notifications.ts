@@ -16,12 +16,23 @@ type NotifyRoleInput = Omit<NotifyUserInput, 'userId'> & {
   roles: string[]
 }
 
+function getAppBaseUrl(): string {
+  const explicit = process.env.APP_BASE_URL || process.env.NEXTAUTH_URL
+  if (explicit) return explicit.replace(/\/$/, '')
+  // Vercel sets VERCEL_PROJECT_PRODUCTION_URL to the production alias (no
+  // protocol) on every deployment, so emails sent from preview builds still
+  // link back to prod rather than a preview URL or localhost.
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  if (vercel) return `https://${vercel.replace(/\/$/, '')}`
+  return 'http://localhost:3000'
+}
+
 function absoluteLink(pathOrUrl: string | undefined) {
   if (!pathOrUrl) return undefined
   if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl
 
-  const baseUrl = process.env.APP_BASE_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
-  return `${baseUrl.replace(/\/$/, '')}${pathOrUrl.startsWith('/') ? '' : '/'}${pathOrUrl}`
+  const baseUrl = getAppBaseUrl()
+  return `${baseUrl}${pathOrUrl.startsWith('/') ? '' : '/'}${pathOrUrl}`
 }
 
 function emailText(title: string, body: string, link?: string) {
@@ -73,6 +84,7 @@ export async function notifyUsers(entries: NotifyUserInput[]) {
   await Promise.all(entries.map(async (entry) => {
     const user = byUserId.get(entry.userId)
     const link = absoluteLink(entry.link)
+    const logoUrl = absoluteLink('/brand/email/wordmark-320.png')
 
     if (user?.email) {
       try {
@@ -84,6 +96,7 @@ export async function notifyUsers(entries: NotifyUserInput[]) {
             title: entry.title,
             body: entry.body,
             link,
+            logoUrl,
           }),
         })
         if (!emailResult.sent && emailResult.reason === 'missing-config') {
