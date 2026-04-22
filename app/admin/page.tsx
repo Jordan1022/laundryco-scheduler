@@ -24,6 +24,7 @@ import SignOutButton from '@/components/SignOutButton'
 import bcrypt from 'bcryptjs'
 import { notifyUsers } from '@/lib/notifications'
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
+import { BUSINESS_TZ, parseChicagoWalltime } from '@/lib/time'
 import {
   STANDARD_SCHEDULE_HORIZON_DAYS,
   buildStandardShiftInputs,
@@ -31,9 +32,9 @@ import {
   type StandardShiftBlock,
 } from '@/lib/standardSchedule'
 
-const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
-const timeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
-const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
+const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
+const timeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
+const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
 const CLOSING_TIME_MINUTES = 20 * 60 // 8:00 PM
 const ACTIVE_ROLES = ['employee', 'manager', 'admin'] as const
 const DB_INSERT_CHUNK = 500
@@ -75,9 +76,7 @@ function shiftStatusPill(status: string | null) {
 }
 
 function parseLocalDateTime(dateValue: string, timeValue: string) {
-  const dateTime = new Date(`${dateValue}T${timeValue}`)
-  if (Number.isNaN(dateTime.getTime())) return null
-  return dateTime
+  return parseChicagoWalltime(dateValue, timeValue)
 }
 
 function parseTimeToMinutes(timeValue: string) {
@@ -108,10 +107,7 @@ function getQueryValue(value: string | string[] | undefined) {
 
 function parseDateOnly(value: string) {
   if (!value) return null
-  const parsed = new Date(`${value}T00:00`)
-  if (Number.isNaN(parsed.getTime())) return null
-  parsed.setHours(0, 0, 0, 0)
-  return parsed
+  return parseChicagoWalltime(value, '00:00')
 }
 
 async function requireManagerSession() {
@@ -1854,7 +1850,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const todayIso = formatDateInput(new Date())
   const openStaffEditId = getQueryValue(searchParams?.openStaffId) ?? ''
 
-  const todayLong = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(now)
+  const todayLong = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: BUSINESS_TZ }).format(now)
   const triagePriority: 'approvals' | 'coverage' | 'clear' =
     pendingRequestsCount > 0 ? 'approvals' : unfilledUpcomingShifts.length > 0 ? 'coverage' : 'clear'
 
@@ -2183,8 +2179,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   const isOpen = assignedCount === 0 && !isCancelled
                   const assignedUserId = assignedUserIdByShift.get(shift.id) ?? ''
                   const assignedUserName = assignedUserId ? userNameMap.get(assignedUserId) : undefined
-                  const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' }).format(shift.startTime).toUpperCase()
-                  const month = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(shift.startTime).toUpperCase()
+                  const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: BUSINESS_TZ }).format(shift.startTime).toUpperCase()
+                  const month = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: BUSINESS_TZ }).format(shift.startTime).toUpperCase()
                   const ticketNo = String(shift.id).slice(0, 6).toUpperCase()
                   const primaryStatusTone: 'sage' | 'ochre' | 'cherry' | 'muted' = isCancelled
                     ? 'cherry'

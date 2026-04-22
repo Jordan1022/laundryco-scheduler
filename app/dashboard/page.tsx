@@ -17,13 +17,14 @@ import ConfirmSubmitButton from '@/components/ConfirmSubmitButton'
 import { notifyRoles, notifyUsers } from '@/lib/notifications'
 import ScheduleGridWithModal from '@/components/ScheduleGridWithModal'
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
+import { BUSINESS_TZ, parseChicagoWalltime } from '@/lib/time'
 
 const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
-const monthDayLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
-const shortDateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
-const shortTimeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
-const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
+const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: BUSINESS_TZ })
+const monthDayLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
+const shortDateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
+const shortTimeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
+const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
 const CLOSING_TIME_MINUTES = 20 * 60 // 8:00 PM
 
 type DashboardView = 'week' | 'month'
@@ -129,16 +130,11 @@ async function requireAuthenticatedSession() {
 }
 
 function parseISODateOnly(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
-  const date = new Date(`${value}T00:00:00`)
-  if (Number.isNaN(date.getTime())) return null
-  return date
+  return parseChicagoWalltime(value, '00:00')
 }
 
 function parseLocalDateTime(dateValue: string, timeValue: string) {
-  const dateTime = new Date(`${dateValue}T${timeValue}`)
-  if (Number.isNaN(dateTime.getTime())) return null
-  return dateTime
+  return parseChicagoWalltime(dateValue, timeValue)
 }
 
 function parseTimeToMinutes(timeValue: string) {
@@ -747,8 +743,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const nextShift = upcomingShiftRows[0]
   const nextShiftDateParts = nextShift
     ? {
-        weekday: new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'UTC' }).format(nextShift.startTime),
-        month: new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(nextShift.startTime).toUpperCase(),
+        weekday: new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: BUSINESS_TZ }).format(nextShift.startTime),
+        month: new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: BUSINESS_TZ }).format(nextShift.startTime).toUpperCase(),
         day: nextShift.startTime.getDate(),
         year: nextShift.startTime.getFullYear(),
         startLabel: shortTimeLabel.format(nextShift.startTime),
@@ -756,7 +752,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         ticketNo: String(nextShift.shiftId).slice(0, 6).toUpperCase(),
       }
     : null
-  const todayLong = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(now)
+  const todayLong = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: BUSINESS_TZ }).format(now)
 
   return (
     <div className="relative min-h-screen">
@@ -1167,8 +1163,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {upcomingShiftRows.map((shift) => {
-                const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' }).format(shift.startTime).toUpperCase()
-                const month = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(shift.startTime).toUpperCase()
+                const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: BUSINESS_TZ }).format(shift.startTime).toUpperCase()
+                const month = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: BUSINESS_TZ }).format(shift.startTime).toUpperCase()
                 return (
                   <TicketCard key={shift.shiftId} tone="bleach" className="overflow-hidden p-0">
                     <div className="flex items-stretch">
