@@ -178,16 +178,16 @@ export default function ScheduleGridWithModal({
                   selectedView === 'month' && !day.isCurrentMonth && 'bg-muted/40 text-ink-muted',
                 )}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <span
                     className={cn(
-                      'text-xs font-semibold',
-                      day.isToday && 'bg-ink text-paper rounded-full h-6 w-6 inline-flex items-center justify-center',
+                      'inline-flex h-6 w-6 items-center justify-center text-xs font-semibold leading-none',
+                      day.isToday && 'rounded-full bg-ink text-paper',
                     )}
                   >
                     {day.dayNumber}
                   </span>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 pt-1">
                     {day.shiftCount > 0 ? (
                       <span className="text-[10px] text-ink-muted">{day.shiftCount} shift{day.shiftCount === 1 ? '' : 's'}</span>
                     ) : null}
@@ -197,7 +197,7 @@ export default function ScheduleGridWithModal({
                         aria-label={`Add shift on ${day.dateLabel}`}
                         title="Add shift"
                         onClick={() => setCreateDayKey(day.key)}
-                        className="inline-flex h-5 w-5 items-center justify-center rounded-sm text-ink-muted hover:bg-ink/10 hover:text-ink"
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-sm border border-ink/15 bg-ink/5 text-ink/70 hover:bg-ink/10 hover:text-ink"
                       >
                         <Plus className="h-3.5 w-3.5" />
                       </button>
@@ -444,7 +444,7 @@ function ShiftTile({ shift, variant, onClick }: ShiftTileProps) {
           ? 'border-cherry/40 bg-cherry-soft text-cherry hover:border-cherry/60'
           : shift.isMine
             ? 'border-ink bg-ink text-paper hover:bg-ink-dim'
-            : 'border-ink/20 bg-bleach text-ink hover:border-ink/40',
+            : 'border-ink/20 bg-paper text-ink hover:border-ink/40',
       )}
     >
       <p className={cn('truncate font-bold', isDesktop ? '' : 'text-sm')}>
