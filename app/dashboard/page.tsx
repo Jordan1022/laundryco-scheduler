@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { and, count, desc, eq, gte, isNull, lt, ne, or } from 'drizzle-orm'
+import { and, count, desc, eq, gte, inArray, isNull, lt, ne, or } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { assignments, notifications, shiftSwapRequests, shifts, timeOffRequests, users } from '@/lib/schema'
 import { Button } from '@/components/ui/button'
@@ -383,6 +383,110 @@ async function createShiftFromCalendarAction(formData: FormData) {
   redirect(buildDashboardReturnUrl(returnView, returnDate, { status: 'calendar-shift-created', hash: 'schedule' }))
 }
 
+async function assignShiftFromCalendarAction(formData: FormData) {
+  'use server'
+
+  const session = await requireAuthenticatedSession()
+  const { returnView, returnDate } = getReturnContext(formData)
+
+  if (session.user.role !== 'manager' && session.user.role !== 'admin') {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-not-authorized', hash: 'schedule' }))
+  }
+
+  const shiftId = String(formData.get('shiftId') ?? '')
+  const assignedUserId = String(formData.get('assignedUserId') ?? '')
+
+  if (!shiftId) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-missing-fields', hash: 'schedule' }))
+  }
+
+  const [shiftRow] = await db.select({
+    id: shifts.id,
+    title: shifts.title,
+    startTime: shifts.startTime,
+    endTime: shifts.endTime,
+    status: shifts.status,
+  }).from(shifts).where(eq(shifts.id, shiftId)).limit(1)
+
+  if (!shiftRow) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-invalid-shift', hash: 'schedule' }))
+  }
+
+  const existingAssignedRows = await db.select({
+    id: assignments.id,
+    userId: assignments.userId,
+  })
+    .from(assignments)
+    .where(and(eq(assignments.shiftId, shiftId), eq(assignments.status, 'assigned')))
+  const previousAssignedUserIds = [...new Set(existingAssignedRows.map((row) => row.userId))]
+
+  if (assignedUserId) {
+    const [matchingUser] = await db.select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, assignedUserId), ne(users.role, 'inactive')))
+      .limit(1)
+    if (!matchingUser) {
+      redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-invalid-assignee', hash: 'schedule' }))
+    }
+
+    const alreadyAssigned = existingAssignedRows.find((row) => row.userId === assignedUserId)
+    if (alreadyAssigned) {
+      const idsToRemove = existingAssignedRows
+        .filter((row) => row.id !== alreadyAssigned.id)
+        .map((row) => row.id)
+      if (idsToRemove.length > 0) {
+        await db.delete(assignments).where(inArray(assignments.id, idsToRemove))
+      }
+    } else if (existingAssignedRows.length > 0) {
+      const [primary, ...rest] = existingAssignedRows
+      await db.update(assignments).set({
+        userId: assignedUserId,
+        status: 'assigned',
+      }).where(eq(assignments.id, primary.id))
+      if (rest.length > 0) {
+        await db.delete(assignments).where(inArray(assignments.id, rest.map((row) => row.id)))
+      }
+    } else {
+      await db.insert(assignments).values({
+        shiftId,
+        userId: assignedUserId,
+        status: 'assigned',
+      })
+    }
+  } else if (existingAssignedRows.length > 0) {
+    await db.delete(assignments).where(inArray(assignments.id, existingAssignedRows.map((row) => row.id)))
+  }
+
+  const currentAssignedRows = await db.select({ userId: assignments.userId })
+    .from(assignments)
+    .where(and(eq(assignments.shiftId, shiftId), eq(assignments.status, 'assigned')))
+  const currentAssignedUserIds = [...new Set(currentAssignedRows.map((row) => row.userId))]
+
+  if (shiftRow.status !== 'draft' && assignedUserId && !previousAssignedUserIds.includes(assignedUserId)) {
+    await notifyUsers([{
+      userId: assignedUserId,
+      title: 'New shift assigned',
+      body: `${shiftRow.title} on ${formatShiftDateTime(shiftRow.startTime, shiftRow.endTime)}.`,
+      link: '/dashboard',
+    }])
+  }
+
+  const removedUserIds = previousAssignedUserIds.filter((userId) => !currentAssignedUserIds.includes(userId))
+  if (removedUserIds.length > 0) {
+    await notifyUsers(removedUserIds.map((userId) => ({
+      userId,
+      title: 'Shift unassigned',
+      body: `You were removed from ${shiftRow.title} on ${formatShiftDateTime(shiftRow.startTime, shiftRow.endTime)}.`,
+      link: '/dashboard',
+    })))
+  }
+
+  redirect(buildDashboardReturnUrl(returnView, returnDate, {
+    status: assignedUserId ? 'calendar-shift-assigned' : 'calendar-shift-unassigned',
+    hash: 'schedule',
+  }))
+}
+
 async function dismissNotificationAction(formData: FormData) {
   'use server'
 
@@ -611,6 +715,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         endLabel: shortTimeLabel.format(shift.endTime),
         dateTimeLabel: formatShiftDateTime(shift.startTime, shift.endTime),
         assigneeLabel,
+        assignedUserId: shift.assignees[0]?.userId ?? null,
         isMine,
         isOpen,
       }
@@ -657,7 +762,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     <div className="relative min-h-screen">
       <header className="relative border-b border-ink/15 bg-paper/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <Brandmark size="md" withWordmark subtitle={canManageStaff ? 'Employee view' : 'Staff workspace'} />
+          <Brandmark variant="wordmark-leaguecity" size="md" />
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Stamp tone="muted">{role}</Stamp>
             {canManageStaff ? (
@@ -802,12 +907,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               Shift added from calendar.
             </div>
           ) : null}
+          {formStatus === 'calendar-shift-assigned' ? (
+            <div className="mb-3 rounded-sm border border-sage/40 bg-sage-soft px-3 py-2 text-xs text-sage">
+              Shift assigned.
+            </div>
+          ) : null}
+          {formStatus === 'calendar-shift-unassigned' ? (
+            <div className="mb-3 rounded-sm border border-sage/40 bg-sage-soft px-3 py-2 text-xs text-sage">
+              Shift unassigned.
+            </div>
+          ) : null}
           {formError && formError.startsWith('calendar-') ? (
             <div className="mb-3 rounded-sm border border-cherry/40 bg-cherry-soft px-3 py-2 text-xs text-cherry">
               {formError === 'calendar-missing-fields' && 'Date, start time, and end time are required.'}
               {formError === 'calendar-invalid-time' && 'Shift end time must be after start time.'}
               {formError === 'calendar-after-hours' && 'Store closes at 8:00 PM. Shifts must end by 8:00 PM.'}
               {formError === 'calendar-invalid-assignee' && 'The selected assignee does not exist.'}
+              {formError === 'calendar-invalid-shift' && 'That shift no longer exists.'}
             </div>
           ) : null}
 
@@ -821,6 +937,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               returnView={selectedView}
               returnDate={formatDateParam(anchorDate)}
               createShiftAction={canManageStaff ? createShiftFromCalendarAction : undefined}
+              assignShiftAction={canManageStaff ? assignShiftFromCalendarAction : undefined}
             />
           </TicketCard>
         </section>

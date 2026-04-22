@@ -56,10 +56,17 @@ export default function LoginPage() {
       />
 
       <div className="relative mx-auto flex min-h-screen max-w-5xl items-center justify-center px-4 py-10">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute bottom-8 right-[6%] hidden xl:block"
+        >
+          <Brandmark variant="mascot" size="xl" />
+        </div>
+
         <div className="w-full max-w-md animate-reveal-up">
-          <div className="mb-6 flex items-center justify-between">
-            <Brandmark size="md" withWordmark subtitle="Staff sign-in" />
-            <Stamp tone="muted">Est. 2025</Stamp>
+          <div className="mb-8 flex flex-col items-center gap-3">
+            <Brandmark variant="wordmark-leaguecity" size="lg" />
+            <Stamp tone="muted">Staff sign-in · Est. 2025</Stamp>
           </div>
 
           <TicketCard tone="bleach" className="p-8">

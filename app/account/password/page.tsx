@@ -100,7 +100,7 @@ export default async function PasswordPage({ searchParams }: PasswordPageProps) 
     <div className="relative min-h-screen">
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <Brandmark size="md" withWordmark subtitle="Account · Change password" />
+          <Brandmark variant="wordmark-leaguecity" size="md" />
           <Button asChild variant="outline" size="sm">
             <Link href="/dashboard">← Back to dashboard</Link>
           </Button>
