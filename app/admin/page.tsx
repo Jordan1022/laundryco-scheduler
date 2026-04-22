@@ -22,7 +22,7 @@ import UpcomingShiftsFilter, {
   isShiftFilter,
   type ShiftFilter,
 } from '@/components/UpcomingShiftsFilter'
-import { Drawer, DrawerForm } from '@/components/ui/drawer'
+import { Popup, PopupForm } from '@/components/ui/popup'
 import { cn } from '@/lib/utils'
 import { CalendarDays, CalendarPlus, CheckSquare, Pencil, Phone, Plus, UserPlus } from 'lucide-react'
 import SignOutButton from '@/components/SignOutButton'
@@ -1369,7 +1369,7 @@ type StaffRow = {
   role: string
 }
 
-function ShiftEditDrawer({
+function ShiftEditPopup({
   shift,
   assignedUserId,
   staff,
@@ -1381,7 +1381,7 @@ function ShiftEditDrawer({
   initialOpen: boolean
 }) {
   return (
-    <Drawer
+    <Popup
       title={`Edit shift — ${dateLabel.format(shift.startTime)}`}
       description={`${timeLabel.format(shift.startTime)} – ${timeLabel.format(shift.endTime)}`}
       initialOpen={initialOpen}
@@ -1392,7 +1392,7 @@ function ShiftEditDrawer({
         </Button>
       }
     >
-      <DrawerForm action={updateShiftAction} className="space-y-4">
+      <PopupForm action={updateShiftAction} className="space-y-4">
         <input type="hidden" name="shiftId" value={shift.id} />
         <div className="space-y-1.5">
           <label htmlFor={`shift-assignee-${shift.id}`} className="text-sm font-medium">Assign to</label>
@@ -1480,9 +1480,9 @@ function ShiftEditDrawer({
         <div className="flex justify-end gap-2 pt-2">
           <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">Save Changes</Button>
         </div>
-      </DrawerForm>
+      </PopupForm>
 
-      <DrawerForm action={setShiftCancelledAction} className="mt-4 border-t pt-4 flex justify-end">
+      <PopupForm action={setShiftCancelledAction} className="mt-4 border-t pt-4 flex justify-end">
         <input type="hidden" name="shiftId" value={shift.id} />
         <input type="hidden" name="mode" value={shift.status === 'cancelled' ? 'restore' : 'cancel'} />
         <ConfirmSubmitButton
@@ -1497,12 +1497,12 @@ function ShiftEditDrawer({
         >
           {shift.status === 'cancelled' ? 'Restore Shift' : 'Cancel Shift'}
         </ConfirmSubmitButton>
-      </DrawerForm>
-    </Drawer>
+      </PopupForm>
+    </Popup>
   )
 }
 
-function StaffEditDrawer({
+function StaffEditPopup({
   staff,
   currentUserId,
   initialOpen,
@@ -1512,7 +1512,7 @@ function StaffEditDrawer({
   initialOpen: boolean
 }) {
   return (
-    <Drawer
+    <Popup
       title={staff.name}
       description={staff.email}
       initialOpen={initialOpen}
@@ -1640,7 +1640,7 @@ function StaffEditDrawer({
           )}
         </div>
       </div>
-    </Drawer>
+    </Popup>
   )
 }
 
@@ -2081,7 +2081,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <p className="mt-1 text-sm text-ink-muted">Tap a ticket to edit, reassign, or cancel.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Drawer
+              <Popup
                 title="New shift"
                 description={`Default: ${DEFAULT_SHIFT_TITLE} at ${DEFAULT_SHIFT_LOCATION}.`}
                 initialOpen={openShiftCreate}
@@ -2150,9 +2150,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">Save Shift</Button>
                   </div>
                 </form>
-              </Drawer>
+              </Popup>
 
-              <Drawer
+              <Popup
                 title="Standard schedule"
                 description="Apply the recurring weekly pattern for the next 5 years, or clear future shifts before changing it."
                 initialOpen={openStandardSchedule}
@@ -2169,9 +2169,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   applyAction={applyStandardScheduleAction}
                   clearAction={clearFutureShiftsAction}
                 />
-              </Drawer>
+              </Popup>
 
-              <Drawer
+              <Popup
                 title="Recurring assignments"
                 description="Set who works a weekly slot in perpetuity, or remove them."
                 initialOpen={openRecurringAssignments}
@@ -2188,7 +2188,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   assignAction={assignRecurringAction}
                   unassignAction={unassignRecurringAction}
                 />
-              </Drawer>
+              </Popup>
             </div>
           </div>
         ) : null}
@@ -2267,7 +2267,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           </div>
                           <div className="mt-4 flex items-center justify-between border-t border-dashed border-ink/15 pt-3">
                             <span className="stamp text-ink/50">Laundry Co. · {DEFAULT_SHIFT_TITLE}</span>
-                            <ShiftEditDrawer
+                            <ShiftEditPopup
                               shift={shift}
                               assignedUserId={assignedUserId}
                               staff={schedulableStaffRows}
@@ -2411,7 +2411,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <h2 className="text-lg font-semibold">Staff directory</h2>
                 <p className="text-sm text-muted-foreground">Tap a row to update profile, role, or password.</p>
               </div>
-              <Drawer
+              <Popup
                 title="Add staff"
                 description="Create a new account with a temporary password."
                 initialOpen={openStaffCreate}
@@ -2456,7 +2456,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     <Button type="submit" className="bg-[#1e3a8a] hover:bg-[#172b6d]">Create Account</Button>
                   </div>
                 </form>
-              </Drawer>
+              </Popup>
             </div>
 
             <Card>
@@ -2486,7 +2486,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           ) : null}
                         </div>
                         <div className="shrink-0">
-                          <StaffEditDrawer
+                          <StaffEditPopup
                             staff={staff}
                             currentUserId={session.user.id}
                             initialOpen={openStaffEditId === staff.id}

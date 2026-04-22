@@ -4,7 +4,7 @@ import * as React from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type DrawerProps = {
+type PopupProps = {
   trigger: React.ReactNode
   title: string
   description?: string
@@ -12,21 +12,21 @@ type DrawerProps = {
   initialOpen?: boolean
 }
 
-type DrawerContextValue = { close: () => void }
-const DrawerContext = React.createContext<DrawerContextValue | null>(null)
+type PopupContextValue = { close: () => void }
+const PopupContext = React.createContext<PopupContextValue | null>(null)
 
-export function useDrawerClose() {
-  return React.useContext(DrawerContext)?.close ?? (() => {})
+export function usePopupClose() {
+  return React.useContext(PopupContext)?.close ?? (() => {})
 }
 
 /**
- * Form wrapper that closes its enclosing Drawer when submitted. Use this for
- * any form inside a Drawer whose server action should dismiss the drawer on
- * submit (e.g. Save Changes, Cancel Shift). Outside a Drawer it behaves as a
+ * Form wrapper that closes its enclosing Popup when submitted. Use this for
+ * any form inside a Popup whose server action should dismiss the popup on
+ * submit (e.g. Save Changes, Cancel Shift). Outside a Popup it behaves as a
  * plain <form>.
  */
-export function DrawerForm(props: React.ComponentPropsWithoutRef<'form'>) {
-  const close = useDrawerClose()
+export function PopupForm(props: React.ComponentPropsWithoutRef<'form'>) {
+  const close = usePopupClose()
   return (
     <form
       {...props}
@@ -38,7 +38,7 @@ export function DrawerForm(props: React.ComponentPropsWithoutRef<'form'>) {
   )
 }
 
-export function Drawer({ trigger, title, description, children, initialOpen = false }: DrawerProps) {
+export function Popup({ trigger, title, description, children, initialOpen = false }: PopupProps) {
   const [open, setOpen] = React.useState(initialOpen)
   const panelRef = React.useRef<HTMLDivElement | null>(null)
   const close = React.useCallback(() => setOpen(false), [])
@@ -75,7 +75,7 @@ export function Drawer({ trigger, title, description, children, initialOpen = fa
     <>
       {triggerWithHandler}
       {open ? (
-        <DrawerContext.Provider value={{ close }}>
+        <PopupContext.Provider value={{ close }}>
           <div
             role="dialog"
             aria-modal="true"
@@ -112,7 +112,7 @@ export function Drawer({ trigger, title, description, children, initialOpen = fa
               <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
             </div>
           </div>
-        </DrawerContext.Provider>
+        </PopupContext.Provider>
       ) : null}
     </>
   )
