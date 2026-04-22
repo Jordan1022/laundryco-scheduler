@@ -19,11 +19,11 @@ import ScheduleGridWithModal from '@/components/ScheduleGridWithModal'
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
 
 const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' })
-const monthDayLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
-const shortDateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-const shortTimeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' })
-const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+const monthDayLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+const shortDateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
+const shortTimeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
+const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
 const CLOSING_TIME_MINUTES = 20 * 60 // 8:00 PM
 
 type DashboardView = 'week' | 'month'
@@ -747,8 +747,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const nextShift = upcomingShiftRows[0]
   const nextShiftDateParts = nextShift
     ? {
-        weekday: new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(nextShift.startTime),
-        month: new Intl.DateTimeFormat('en-US', { month: 'short' }).format(nextShift.startTime).toUpperCase(),
+        weekday: new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'UTC' }).format(nextShift.startTime),
+        month: new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(nextShift.startTime).toUpperCase(),
         day: nextShift.startTime.getDate(),
         year: nextShift.startTime.getFullYear(),
         startLabel: shortTimeLabel.format(nextShift.startTime),
@@ -1167,8 +1167,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {upcomingShiftRows.map((shift) => {
-                const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(shift.startTime).toUpperCase()
-                const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(shift.startTime).toUpperCase()
+                const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' }).format(shift.startTime).toUpperCase()
+                const month = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(shift.startTime).toUpperCase()
                 return (
                   <TicketCard key={shift.shiftId} tone="bleach" className="overflow-hidden p-0">
                     <div className="flex items-stretch">

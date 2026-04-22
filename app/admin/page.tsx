@@ -31,9 +31,9 @@ import {
   type StandardShiftBlock,
 } from '@/lib/standardSchedule'
 
-const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-const timeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' })
-const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
+const timeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
+const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
 const CLOSING_TIME_MINUTES = 20 * 60 // 8:00 PM
 const ACTIVE_ROLES = ['employee', 'manager', 'admin'] as const
 const DB_INSERT_CHUNK = 500
@@ -2183,8 +2183,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   const isOpen = assignedCount === 0 && !isCancelled
                   const assignedUserId = assignedUserIdByShift.get(shift.id) ?? ''
                   const assignedUserName = assignedUserId ? userNameMap.get(assignedUserId) : undefined
-                  const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(shift.startTime).toUpperCase()
-                  const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(shift.startTime).toUpperCase()
+                  const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' }).format(shift.startTime).toUpperCase()
+                  const month = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(shift.startTime).toUpperCase()
                   const ticketNo = String(shift.id).slice(0, 6).toUpperCase()
                   const primaryStatusTone: 'sage' | 'ochre' | 'cherry' | 'muted' = isCancelled
                     ? 'cherry'
