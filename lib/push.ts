@@ -93,8 +93,7 @@ export async function sendPushNotification(
         headers: {
           TTL: '60',
           Urgency: 'high',
-          Authorization: `WebPush ${jwt}`,
-          'Crypto-Key': `p256ecdsa=${config.publicKey}`,
+          Authorization: `vapid t=${jwt}, k=${config.publicKey}`,
         },
       })
 
