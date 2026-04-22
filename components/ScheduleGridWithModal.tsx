@@ -335,7 +335,7 @@ export default function ScheduleGridWithModal({
               <input type="hidden" name="shiftId" value={activeShiftContext.shift.shiftId} />
               <input type="hidden" name="mode" value="cancel" />
               <p className="text-xs text-ink-muted">
-                Cancels this one ticket. Other tickets at the same time aren't affected.
+                Cancels this one ticket. Other tickets at the same time aren&rsquo;t affected.
               </p>
               <ConfirmSubmitButton
                 type="submit"
