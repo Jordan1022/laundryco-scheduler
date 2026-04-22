@@ -2255,7 +2255,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   return (
                     <TicketCard key={shift.id} tone="bleach" className="overflow-hidden p-0">
                       <div className="flex flex-col sm:flex-row">
-                        <div className="flex w-full items-center justify-between border-b border-dashed border-ink/25 bg-paper/60 px-5 py-3 sm:w-28 sm:flex-col sm:items-start sm:justify-center sm:border-b-0 sm:border-r sm:py-5">
+                        <div className="flex w-full items-center justify-between border-b border-dashed border-ink/25 bg-paper-dim px-5 py-3 sm:w-28 sm:flex-col sm:items-start sm:justify-center sm:border-b-0 sm:border-r sm:py-5">
                           <div>
                             <span className="stamp text-ink/60">{month}</span>
                             <p className="font-serif text-4xl leading-none text-ink">{shift.startTime.getDate()}</p>

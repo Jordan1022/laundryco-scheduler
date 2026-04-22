@@ -302,7 +302,7 @@ export default function ScheduleGridWithModal({
             <form
               action={assignShiftAction}
               onSubmit={() => setActiveShift(null)}
-              className="mt-3 flex items-center justify-between gap-3 rounded-sm border border-dashed border-ink/20 bg-paper/40 px-3 py-2"
+              className="mt-3 flex items-center justify-between gap-3 rounded-sm border border-dashed border-ink/20 bg-paper-dim px-3 py-2"
             >
               <input type="hidden" name="returnView" value={returnView} />
               <input type="hidden" name="returnDate" value={returnDate} />

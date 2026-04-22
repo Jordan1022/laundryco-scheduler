@@ -6,12 +6,15 @@
 
 @layer base {
   :root {
-    /* Brand palette — hex values from BRAND.md, expressed as HSL for the token system */
-    --paper: 42 39% 94%;           /* brand-cream #F5F1E8 */
+    /* Brand palette — hex values from BRAND.md, expressed as HSL for the token system.
+       Three cream tiers give depth without violating Rule 3 (no pure white for large areas):
+         paper-dim (~89% L) < paper (94% L) < bleach (98% L) — all stay within the warm cream family. */
+    --paper: 42 39% 94%;           /* brand-cream #F5F1E8 — page base */
+    --paper-dim: 36 22% 89%;       /* aged-cream — inset strips, ledger rows, stub backs */
     --ink: 211 61% 19%;            /* brand-navy #13304F */
     --ink-dim: 211 50% 28%;        /* lighter navy for hover */
     --ink-muted: 211 15% 42%;      /* warm grey-navy for meta */
-    --bleach: 42 50% 97%;          /* off-cream card */
+    --bleach: 42 38% 98%;          /* off-cream card — lifted surface */
     --cherry: 6 66% 47%;           /* brand-red #C73A29 */
     --cherry-soft: 6 70% 94%;      /* red tint background */
     --sneaker-blue: 203 56% 44%;   /* brand-sneaker-blue #3180B0 (mascot-only) */
@@ -49,6 +52,7 @@
   .dark {
     /* Film-noir reverse: warm charcoal with cream ink */
     --paper: 220 18% 9%;
+    --paper-dim: 220 14% 7%;
     --ink: 38 30% 90%;
     --ink-dim: 38 22% 80%;
     --ink-muted: 38 8% 65%;

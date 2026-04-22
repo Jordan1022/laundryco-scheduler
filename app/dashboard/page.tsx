@@ -869,7 +869,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             {nextShiftDateParts ? (
               <TicketCard tone="bleach" className="relative overflow-hidden p-0 animate-stamp-in">
                 <div className="flex items-stretch">
-                  <div className="flex w-24 flex-col items-center justify-center border-r border-dashed border-ink/25 bg-paper/60 py-5">
+                  <div className="flex w-24 flex-col items-center justify-center border-r border-dashed border-ink/25 bg-paper-dim py-5">
                     <span className="stamp text-ink/60">{nextShiftDateParts.month}</span>
                     <span className="font-serif text-5xl leading-none text-ink">{nextShiftDateParts.day}</span>
                     <span className="stamp mt-1 text-ink/50">{nextShiftDateParts.year}</span>
@@ -894,7 +894,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between border-t border-dashed border-ink/25 bg-paper/60 px-5 py-2">
+                <div className="flex items-center justify-between border-t border-dashed border-ink/25 bg-paper-dim px-5 py-2">
                   <span className="stamp text-ink/50">No. {nextShiftDateParts.ticketNo}</span>
                   <span className="stamp text-ink/50">Laundry Co. · Main Store</span>
                 </div>
@@ -1116,7 +1116,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     id="reason"
                     name="reason"
                     rows={3}
-                    className="flex w-full rounded-sm border border-ink/20 bg-paper/60 px-3 py-2 text-sm focus:border-ink focus:outline-none"
+                    className="flex w-full rounded-sm border border-ink/20 bg-paper px-3 py-2 text-sm focus:border-ink focus:outline-none"
                     placeholder="Vacation, appointment, personal day…"
                   />
                 </div>
@@ -1170,7 +1170,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <select
                       id="assignmentId"
                       name="assignmentId"
-                      className="flex h-10 w-full rounded-sm border border-ink/20 bg-paper/60 px-3 py-2 text-sm focus:border-ink focus:outline-none"
+                      className="flex h-10 w-full rounded-sm border border-ink/20 bg-paper px-3 py-2 text-sm focus:border-ink focus:outline-none"
                       required
                     >
                       {swapEligibleRows.map((assignment) => (
@@ -1185,7 +1185,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <select
                       id="requestedUserId"
                       name="requestedUserId"
-                      className="flex h-10 w-full rounded-sm border border-ink/20 bg-paper/60 px-3 py-2 text-sm focus:border-ink focus:outline-none"
+                      className="flex h-10 w-full rounded-sm border border-ink/20 bg-paper px-3 py-2 text-sm focus:border-ink focus:outline-none"
                       required
                     >
                       {coworkerRows.map((coworker) => (
@@ -1225,7 +1225,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 return (
                   <TicketCard key={shift.shiftId} tone="bleach" className="overflow-hidden p-0">
                     <div className="flex items-stretch">
-                      <div className="flex w-20 flex-col items-center justify-center border-r border-dashed border-ink/25 bg-paper/60 py-3">
+                      <div className="flex w-20 flex-col items-center justify-center border-r border-dashed border-ink/25 bg-paper-dim py-3">
                         <span className="stamp text-ink/60">{month}</span>
                         <span className="font-serif text-3xl leading-none text-ink">{shift.startTime.getDate()}</span>
                         <span className="stamp mt-1 text-ink/50">{weekday}</span>
