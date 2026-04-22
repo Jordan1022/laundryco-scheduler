@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { notifications, pushSubscriptions, users } from '@/lib/schema'
 import { sendEmailWithResend } from '@/lib/resend'
 import { sendPushNotification } from '@/lib/push'
+import { renderNotificationEmail } from '@/lib/email-template'
 
 type NotifyUserInput = {
   userId: string
@@ -79,6 +80,11 @@ export async function notifyUsers(entries: NotifyUserInput[]) {
           to: user.email,
           subject: entry.title,
           text: emailText(entry.title, entry.body, link),
+          html: renderNotificationEmail({
+            title: entry.title,
+            body: entry.body,
+            link,
+          }),
         })
         if (!emailResult.sent && emailResult.reason === 'missing-config') {
           console.warn('Email notification skipped due to missing Resend config', {
