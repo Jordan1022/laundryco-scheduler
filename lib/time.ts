@@ -116,3 +116,15 @@ export const dateTimeLabel = new Intl.DateTimeFormat('en-US', {
 export function formatShiftDateTime(start: Date, end: Date): string {
   return `${dateTimeLabel.format(start)} - ${shortTimeLabel.format(end)}`
 }
+
+/** "YYYY-MM-DD" in Chicago walltime — suitable for <input type="date"> defaults. */
+export function chicagoDateInputValue(date: Date): string {
+  const { year, month, day } = getTzWallAsUtc(date, BUSINESS_TZ)
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+/** "HH:MM" (24h) in Chicago walltime — suitable for <input type="time"> defaults. */
+export function chicagoTimeInputValue(date: Date): string {
+  const { hour, minute } = getTzWallAsUtc(date, BUSINESS_TZ)
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}

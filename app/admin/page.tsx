@@ -17,6 +17,11 @@ import { TicketCard, Stamp } from '@/components/ui/TicketCard'
 import { Masthead } from '@/components/ui/Masthead'
 import AdminTabs, { resolveAdminTab } from '@/components/AdminTabs'
 import AdminToast from '@/components/AdminToast'
+import UpcomingShiftsFilter, {
+  DEFAULT_SHIFT_FILTER,
+  isShiftFilter,
+  type ShiftFilter,
+} from '@/components/UpcomingShiftsFilter'
 import { Drawer, DrawerForm } from '@/components/ui/drawer'
 import { cn } from '@/lib/utils'
 import { CalendarDays, CalendarPlus, CheckSquare, Pencil, Phone, Plus, UserPlus } from 'lucide-react'
@@ -24,7 +29,7 @@ import SignOutButton from '@/components/SignOutButton'
 import bcrypt from 'bcryptjs'
 import { notifyUsers } from '@/lib/notifications'
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
-import { BUSINESS_TZ, parseChicagoWalltime } from '@/lib/time'
+import { BUSINESS_TZ, chicagoDateInputValue, chicagoTimeInputValue, parseChicagoWalltime } from '@/lib/time'
 import {
   STANDARD_SCHEDULE_HORIZON_DAYS,
   buildStandardShiftInputs,
@@ -90,14 +95,6 @@ function parseTimeToMinutes(timeValue: string) {
 
 function isValidActiveRole(role: string): role is ActiveRole {
   return ACTIVE_ROLES.includes(role as ActiveRole)
-}
-
-function formatDateInput(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
-
-function formatTimeInput(date: Date) {
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
 function getQueryValue(value: string | string[] | undefined) {
@@ -1350,6 +1347,7 @@ type AdminPageProps = {
     openStaffId?: string | string[]
     tab?: string | string[]
     create?: string | string[]
+    shiftFilter?: string | string[]
   }
 }
 
@@ -1430,7 +1428,7 @@ function ShiftEditDrawer({
           <DatePickerField
             id={`shift-date-${shift.id}`}
             name="shiftDate"
-            defaultValue={formatDateInput(shift.startTime)}
+            defaultValue={chicagoDateInputValue(shift.startTime)}
             required
           />
         </div>
@@ -1441,7 +1439,7 @@ function ShiftEditDrawer({
               id={`shift-start-${shift.id}`}
               name="startTime"
               max="19:59"
-              defaultValue={formatTimeInput(shift.startTime)}
+              defaultValue={chicagoTimeInputValue(shift.startTime)}
               required
             />
           </div>
@@ -1451,7 +1449,7 @@ function ShiftEditDrawer({
               id={`shift-end-${shift.id}`}
               name="endTime"
               max="20:00"
-              defaultValue={formatTimeInput(shift.endTime)}
+              defaultValue={chicagoTimeInputValue(shift.endTime)}
               required
             />
           </div>
@@ -1680,7 +1678,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       startTime: shifts.startTime,
       endTime: shifts.endTime,
       status: shifts.status,
-    }).from(shifts).where(gte(shifts.startTime, now)).orderBy(shifts.startTime).limit(8),
+    }).from(shifts).where(gte(shifts.startTime, now)).orderBy(shifts.startTime).limit(50),
     db.select({
       id: shifts.id,
       startTime: shifts.startTime,
@@ -1796,6 +1794,39 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     if (shift.status === 'cancelled') return false
     return (assignedCountByShift.get(shift.id) ?? 0) === 0
   })
+
+  const shiftFilterRaw = getQueryValue(searchParams?.shiftFilter)
+  const shiftFilter: ShiftFilter = isShiftFilter(shiftFilterRaw) ? shiftFilterRaw : DEFAULT_SHIFT_FILTER
+  const UPCOMING_DISPLAY_LIMIT = 8
+  const isUnfilled = (shift: (typeof upcomingShiftRows)[number]) =>
+    shift.status !== 'cancelled' && (assignedCountByShift.get(shift.id) ?? 0) === 0
+
+  let displayedUpcomingShiftRows = upcomingShiftRows
+  if (shiftFilter === 'unfilled-only') {
+    displayedUpcomingShiftRows = upcomingShiftRows.filter(isUnfilled)
+  } else if (shiftFilter === 'drafts') {
+    displayedUpcomingShiftRows = upcomingShiftRows.filter((shift) => shift.status === 'draft')
+  } else if (shiftFilter === 'cancelled') {
+    displayedUpcomingShiftRows = upcomingShiftRows.filter((shift) => shift.status === 'cancelled')
+  } else if (shiftFilter === 'unfilled-first') {
+    displayedUpcomingShiftRows = [...upcomingShiftRows].sort((a, b) => {
+      const aOpen = isUnfilled(a) ? 0 : 1
+      const bOpen = isUnfilled(b) ? 0 : 1
+      if (aOpen !== bOpen) return aOpen - bOpen
+      return a.startTime.getTime() - b.startTime.getTime()
+    })
+  }
+  // Always keep the explicitly-opened shift visible at the top regardless of filter.
+  if (openShiftId) {
+    const pinned = upcomingShiftRows.find((shift) => shift.id === openShiftId)
+    if (pinned) {
+      displayedUpcomingShiftRows = [
+        pinned,
+        ...displayedUpcomingShiftRows.filter((shift) => shift.id !== openShiftId),
+      ]
+    }
+  }
+  displayedUpcomingShiftRows = displayedUpcomingShiftRows.slice(0, UPCOMING_DISPLAY_LIMIT)
   const salariedUserIds = new Set(
     staffRows
       .filter((staff) => SALARIED_EMAILS.has(staff.email.toLowerCase()))
@@ -1847,7 +1878,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const openStandardSchedule = getQueryValue(searchParams?.create) === 'standard'
   const openRecurringAssignments = getQueryValue(searchParams?.create) === 'recurring'
   const openStaffCreate = getQueryValue(searchParams?.create) === 'staff'
-  const todayIso = formatDateInput(new Date())
+  const todayIso = chicagoDateInputValue(new Date())
   const openStaffEditId = getQueryValue(searchParams?.openStaffId) ?? ''
 
   const todayLong = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: BUSINESS_TZ }).format(now)
@@ -2165,14 +2196,26 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         {activeTab === 'shifts' ? (
           <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
             <div className="space-y-3 xl:col-span-2">
+              <div className="flex items-center justify-between">
+                <UpcomingShiftsFilter active={shiftFilter} />
+                <span className="stamp text-ink/50">
+                  {displayedUpcomingShiftRows.length} of {upcomingShiftRows.length}
+                </span>
+              </div>
               {upcomingShiftRows.length === 0 ? (
                 <TicketCard tone="bleach" className="p-10 text-center">
                   <Stamp tone="muted">No tickets</Stamp>
                   <p className="mt-3 font-serif text-xl text-ink">No upcoming shifts yet.</p>
                   <p className="mt-1 text-xs text-ink-muted">Use Standard Schedule or New Shift to start filling the week.</p>
                 </TicketCard>
+              ) : displayedUpcomingShiftRows.length === 0 ? (
+                <TicketCard tone="bleach" className="p-10 text-center">
+                  <Stamp tone="muted">Nothing here</Stamp>
+                  <p className="mt-3 font-serif text-xl text-ink">No shifts match this filter.</p>
+                  <p className="mt-1 text-xs text-ink-muted">Switch the filter above to see more tickets.</p>
+                </TicketCard>
               ) : (
-                upcomingShiftRows.map((shift) => {
+                displayedUpcomingShiftRows.map((shift) => {
                   const assignedCount = assignedCountByShift.get(shift.id) ?? 0
                   const isCancelled = shift.status === 'cancelled'
                   const isDraft = shift.status === 'draft'
