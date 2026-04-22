@@ -4,15 +4,7 @@ import * as React from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Check, ListFilter } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-export type ShiftFilter =
-  | 'unfilled-first'
-  | 'unfilled-only'
-  | 'all-chronological'
-  | 'drafts'
-  | 'cancelled'
-
-export const DEFAULT_SHIFT_FILTER: ShiftFilter = 'unfilled-first'
+import { DEFAULT_SHIFT_FILTER, type ShiftFilter } from '@/lib/shiftFilter'
 
 const OPTIONS: { id: ShiftFilter; label: string; hint?: string }[] = [
   { id: 'unfilled-first', label: 'Unfilled first', hint: 'Needs-staff at top, then covered' },
@@ -21,10 +13,6 @@ const OPTIONS: { id: ShiftFilter; label: string; hint?: string }[] = [
   { id: 'drafts', label: 'Drafts' },
   { id: 'cancelled', label: 'Cancelled' },
 ]
-
-export function isShiftFilter(value: string | undefined): value is ShiftFilter {
-  return !!value && OPTIONS.some((opt) => opt.id === value)
-}
 
 export default function UpcomingShiftsFilter({ active }: { active: ShiftFilter }) {
   const router = useRouter()

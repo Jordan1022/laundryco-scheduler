@@ -17,11 +17,8 @@ import { TicketCard, Stamp } from '@/components/ui/TicketCard'
 import { Masthead } from '@/components/ui/Masthead'
 import AdminTabs, { resolveAdminTab } from '@/components/AdminTabs'
 import AdminToast from '@/components/AdminToast'
-import UpcomingShiftsFilter, {
-  DEFAULT_SHIFT_FILTER,
-  isShiftFilter,
-  type ShiftFilter,
-} from '@/components/UpcomingShiftsFilter'
+import UpcomingShiftsFilter from '@/components/UpcomingShiftsFilter'
+import { DEFAULT_SHIFT_FILTER, isShiftFilter, type ShiftFilter } from '@/lib/shiftFilter'
 import { Popup, PopupForm } from '@/components/ui/popup'
 import { cn } from '@/lib/utils'
 import { CalendarDays, CalendarPlus, CheckSquare, Pencil, Phone, Plus, UserPlus } from 'lucide-react'
