@@ -5,7 +5,7 @@ export type ShiftFilter =
   | 'drafts'
   | 'cancelled'
 
-export const DEFAULT_SHIFT_FILTER: ShiftFilter = 'unfilled-first'
+export const DEFAULT_SHIFT_FILTER: ShiftFilter = 'unfilled-only'
 
 const SHIFT_FILTERS: readonly ShiftFilter[] = [
   'unfilled-first',

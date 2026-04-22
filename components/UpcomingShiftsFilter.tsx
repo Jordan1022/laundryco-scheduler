@@ -37,7 +37,7 @@ export default function UpcomingShiftsFilter({ active }: { active: ShiftFilter }
     }
   }, [open])
 
-  const activeLabel = OPTIONS.find((opt) => opt.id === active)?.label ?? 'Unfilled first'
+  const activeLabel = OPTIONS.find((opt) => opt.id === active)?.label ?? 'Unfilled only'
 
   const choose = (id: ShiftFilter) => {
     const params = new URLSearchParams(searchParams?.toString() ?? '')
@@ -45,7 +45,7 @@ export default function UpcomingShiftsFilter({ active }: { active: ShiftFilter }
     else params.set('shiftFilter', id)
     params.delete('openShiftId')
     const query = params.toString()
-    router.push(query ? `${pathname}?${query}` : pathname)
+    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false })
     setOpen(false)
   }
 
