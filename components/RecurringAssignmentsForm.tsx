@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { DatePickerField, TimePickerField } from '@/components/ui/date-time-picker'
 import ConfirmSubmitButton from '@/components/ConfirmSubmitButton'
+import { serverActionFormProps } from '@/lib/serverActionForm'
 
 type StaffOption = { id: string; name: string; role: string }
 
@@ -52,7 +53,7 @@ export default function RecurringAssignmentsForm({
 }: RecurringAssignmentsFormProps) {
   return (
     <div className="space-y-8">
-      <form action={assignAction} className="space-y-4">
+      <form {...serverActionFormProps(assignAction)} className="space-y-4">
         <div>
           <h3 className="text-sm font-semibold">Assign to a recurring pattern</h3>
           <p className="text-xs text-muted-foreground">
@@ -121,7 +122,7 @@ export default function RecurringAssignmentsForm({
       </form>
 
       <div className="border-t pt-6">
-        <form action={unassignAction} className="space-y-4">
+        <form {...serverActionFormProps(unassignAction)} className="space-y-4">
           <div>
             <h3 className="text-sm font-semibold">Remove a recurring assignment</h3>
             <p className="text-xs text-muted-foreground">

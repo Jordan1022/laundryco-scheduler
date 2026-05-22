@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { TimePickerField } from '@/components/ui/date-time-picker'
 import ConfirmSubmitButton from '@/components/ConfirmSubmitButton'
 import { cn } from '@/lib/utils'
+import { serverActionFormProps } from '@/lib/serverActionForm'
 
 type DayShift = {
   shiftId: string
@@ -265,7 +266,7 @@ export default function ScheduleGridWithModal({
 
           {canManageStaff && assignShiftAction && staffOptions.length > 0 ? (
             <form
-              action={assignShiftAction}
+              {...serverActionFormProps(assignShiftAction)}
               onSubmit={() => setActiveShift(null)}
               className="mt-4 flex flex-wrap items-end gap-2 border-t border-dashed border-ink/20 pt-4"
             >
@@ -300,7 +301,7 @@ export default function ScheduleGridWithModal({
 
           {canManageStaff && assignShiftAction && !activeShiftContext.shift.isOpen ? (
             <form
-              action={assignShiftAction}
+              {...serverActionFormProps(assignShiftAction)}
               onSubmit={() => setActiveShift(null)}
               className="mt-3 flex items-center justify-between gap-3 rounded-sm border border-dashed border-ink/20 bg-paper-dim px-3 py-2"
             >
@@ -326,7 +327,7 @@ export default function ScheduleGridWithModal({
 
           {canManageStaff && cancelShiftAction ? (
             <form
-              action={cancelShiftAction}
+              {...serverActionFormProps(cancelShiftAction)}
               onSubmit={() => setActiveShift(null)}
               className="mt-4 flex items-center justify-between gap-3 border-t border-dashed border-ink/20 pt-4"
             >
@@ -385,7 +386,7 @@ export default function ScheduleGridWithModal({
           </div>
 
           <form
-            action={createShiftAction}
+            {...serverActionFormProps(createShiftAction)}
             onSubmit={() => setCreateDayKey(null)}
             className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2"
           >
