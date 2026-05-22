@@ -3,20 +3,26 @@ import './globals.css'
 import { AuthProvider } from '@/components/auth-provider'
 import ThemeToggle from '@/components/ThemeToggle'
 import { serif, sans, mono, script, display } from '@/app/fonts'
+import * as Sentry from '@sentry/nextjs';
 
-export const metadata: Metadata = {
-  title: 'Laundry Co. Shift Scheduler',
-  description: 'Employee shift scheduling for Laundry Co.',
-  manifest: '/manifest.webmanifest',
-  icons: {
-    icon: '/icon',
-    apple: '/apple-icon',
-  },
-  appleWebApp: {
-    capable: true,
-    title: 'Laundry Co Scheduler',
-    statusBarStyle: 'default',
-  },
+export function generateMetadata(): Metadata {
+  return {
+    title: 'Laundry Co. Shift Scheduler',
+    description: 'Employee shift scheduling for Laundry Co.',
+    manifest: '/manifest.webmanifest',
+    icons: {
+      icon: '/icon',
+      apple: '/apple-icon',
+    },
+    appleWebApp: {
+      capable: true,
+      title: 'Laundry Co Scheduler',
+      statusBarStyle: 'default',
+    },
+    other: {
+      ...Sentry.getTraceData(),
+    },
+  }
 }
 
 export default function RootLayout({
