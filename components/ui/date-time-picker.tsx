@@ -4,51 +4,63 @@ import { CalendarDays, Clock3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const pickerWrapperClassName =
-  'group relative rounded-xl bg-gradient-to-b from-white to-slate-50/80 dark:from-slate-900 dark:to-slate-800/80'
+  'group relative rounded-sm'
 
 const pickerInputClassName = [
-  'peer flex h-12 w-full rounded-xl border border-slate-200/80 bg-transparent px-4 py-2.5 pr-11 text-sm font-medium text-foreground',
-  'shadow-[0_1px_2px_rgb(0_0_0/0.04),inset_0_1px_0_rgb(255_255_255/0.6)]',
-  'dark:border-slate-700/60 dark:shadow-[0_1px_2px_rgb(0_0_0/0.2),inset_0_1px_0_rgb(255_255_255/0.04)]',
-  'transition-all duration-200 ease-out',
-  'hover:border-slate-300 hover:shadow-[0_2px_6px_rgb(0_0_0/0.06),inset_0_1px_0_rgb(255_255_255/0.6)]',
-  'dark:hover:border-slate-600 dark:hover:shadow-[0_2px_6px_rgb(0_0_0/0.3)]',
-  'focus-visible:outline-none focus-visible:border-blue-500/50 focus-visible:ring-[3px] focus-visible:ring-blue-500/10 focus-visible:shadow-[0_0_0_1px_rgb(59_130_246/0.3),0_2px_8px_rgb(59_130_246/0.08)]',
-  'dark:focus-visible:border-blue-400/50 dark:focus-visible:ring-blue-400/10 dark:focus-visible:shadow-[0_0_0_1px_rgb(96_165_250/0.3),0_2px_8px_rgb(96_165_250/0.08)]',
-  'disabled:cursor-not-allowed disabled:border-slate-200/50 disabled:bg-slate-50/50 disabled:text-muted-foreground disabled:opacity-60 disabled:shadow-none',
-  'dark:disabled:border-slate-700/30 dark:disabled:bg-slate-800/30',
+  'peer flex h-11 w-full rounded-sm border border-ink/20 bg-bleach py-2.5 pl-14 pr-3 font-mono text-sm font-medium tabular-nums text-ink shadow-stamp',
+  'transition-[border-color,box-shadow,background-color,transform] duration-150 ease-out',
+  'hover:-translate-y-px hover:border-ink/35 hover:bg-paper hover:shadow-ticket',
+  'focus-visible:outline-none focus-visible:border-ink/50 focus-visible:bg-paper focus-visible:ring-2 focus-visible:ring-cherry/15 focus-visible:shadow-ticket',
+  'disabled:cursor-not-allowed disabled:border-ink/10 disabled:bg-paper-dim disabled:text-ink-muted disabled:opacity-60 disabled:shadow-none',
+].join(' ')
+
+const iconFrameClassName = [
+  'pointer-events-none absolute inset-y-1 left-1 flex w-10 items-center justify-center rounded-[2px]',
+  'border-r border-dashed border-ink/20 bg-paper-dim text-ink-muted',
+  'transition-colors duration-150 group-hover:text-ink peer-focus-visible:border-cherry/30 peer-focus-visible:text-cherry',
 ].join(' ')
 
 const iconClassName = [
-  'pointer-events-none absolute right-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2',
-  'text-slate-400 transition-colors duration-200',
-  'group-hover:text-slate-500 peer-focus-visible:text-blue-500',
-  'dark:text-slate-500 dark:group-hover:text-slate-400 dark:peer-focus-visible:text-blue-400',
+  'h-4 w-4',
 ].join(' ')
 
 type DatePickerFieldProps = {
   id: string
   name: string
+  value?: string
   defaultValue?: string
   required?: boolean
   disabled?: boolean
   className?: string
   min?: string
   max?: string
+  ariaLabel?: string
+  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void
 }
 
 type TimePickerFieldProps = {
   id: string
   name: string
+  value?: string
   defaultValue?: string
   required?: boolean
   className?: string
   min?: string
   max?: string
+  ariaLabel?: string
   timeIntervals?: number
+  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void
 }
 
-export function parseISODateOnly(value?: string) {
+/**
+ * Validate a "YYYY-MM-DD" string and return a Date at midnight in the JS
+ * runtime's LOCAL time zone. On the server (TZ=UTC) that's UTC midnight; in a
+ * browser it's the user's local midnight. Use this only for input-format
+ * validation and component-internal bounds — NOT for storing or comparing to
+ * shift timestamps. For business-zone parsing, use `parseChicagoWalltime`
+ * from `lib/time.ts`.
+ */
+export function parseISODateOnlyAsLocal(value?: string) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
   const [yearRaw, monthRaw, dayRaw] = value.split('-')
   const year = Number(yearRaw)
@@ -74,7 +86,7 @@ export function parseTimeValue(value?: string) {
 }
 
 function normalizeDateValue(value?: string) {
-  return parseISODateOnly(value) ? value : undefined
+  return parseISODateOnlyAsLocal(value) ? value : undefined
 }
 
 function normalizeTimeValue(value?: string) {
@@ -95,29 +107,38 @@ function openNativePicker(event: React.MouseEvent<HTMLInputElement>) {
 export function DatePickerField({
   id,
   name,
+  value,
   defaultValue,
   required,
   disabled,
   className,
   min,
   max,
+  ariaLabel = 'Date picker',
+  onChange,
 }: DatePickerFieldProps) {
+  const hasControlledValue = value !== undefined
+
   return (
     <div className={cn(pickerWrapperClassName, className)}>
       <input
         id={id}
         name={name}
         type="date"
-        aria-label="Date picker"
-        defaultValue={normalizeDateValue(defaultValue)}
+        aria-label={ariaLabel}
+        value={hasControlledValue ? normalizeDateValue(value) ?? '' : undefined}
+        defaultValue={hasControlledValue ? undefined : normalizeDateValue(defaultValue)}
         required={required}
         disabled={disabled}
         min={normalizeDateValue(min)}
         max={normalizeDateValue(max)}
         onClick={openNativePicker}
+        onChange={onChange}
         className={cn(pickerInputClassName, 'app-native-picker-input [color-scheme:light] dark:[color-scheme:dark]')}
       />
-      <CalendarDays className={iconClassName} />
+      <span className={iconFrameClassName} aria-hidden="true">
+        <CalendarDays className={iconClassName} />
+      </span>
     </div>
   )
 }
@@ -125,14 +146,18 @@ export function DatePickerField({
 export function TimePickerField({
   id,
   name,
+  value,
   defaultValue,
   required,
   className,
   min,
   max,
+  ariaLabel = 'Time picker',
   timeIntervals = 15,
+  onChange,
 }: TimePickerFieldProps) {
   const step = Math.max(1, timeIntervals) * 60
+  const hasControlledValue = value !== undefined
 
   return (
     <div className={cn(pickerWrapperClassName, className)}>
@@ -140,16 +165,20 @@ export function TimePickerField({
         id={id}
         name={name}
         type="time"
-        aria-label="Time picker"
-        defaultValue={normalizeTimeValue(defaultValue)}
+        aria-label={ariaLabel}
+        value={hasControlledValue ? normalizeTimeValue(value) ?? '' : undefined}
+        defaultValue={hasControlledValue ? undefined : normalizeTimeValue(defaultValue)}
         required={required}
         min={normalizeTimeValue(min)}
         max={normalizeTimeValue(max)}
         step={step}
         onClick={openNativePicker}
+        onChange={onChange}
         className={cn(pickerInputClassName, 'app-native-picker-input [color-scheme:light] dark:[color-scheme:dark]')}
       />
-      <Clock3 className={iconClassName} />
+      <span className={iconFrameClassName} aria-hidden="true">
+        <Clock3 className={iconClassName} />
+      </span>
     </div>
   )
 }
