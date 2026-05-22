@@ -44,7 +44,7 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }))
 
     await waitFor(() => {
-      expect(screen.getByText(/Those credentials don’t match/)).toBeInTheDocument()
+      expect(screen.getByText(/Incorrect email or password/)).toBeInTheDocument()
     })
     expect(push).not.toHaveBeenCalled()
     expect(refresh).not.toHaveBeenCalled()
