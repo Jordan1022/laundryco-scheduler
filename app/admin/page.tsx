@@ -28,6 +28,7 @@ import { notifyUsers } from '@/lib/notifications'
 import { sendOnboardingEmail } from '@/lib/onboarding'
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
 import { BUSINESS_TZ, chicagoDateInputValue, chicagoTimeInputValue, parseChicagoWalltime } from '@/lib/time'
+import { formatTimeOffWindow } from '@/lib/timeOff'
 import {
   STANDARD_SCHEDULE_HORIZON_DAYS,
   buildStandardShiftInputs,
@@ -1273,18 +1274,21 @@ async function reviewTimeOffAction(formData: FormData) {
       userId: timeOffRequests.userId,
       startDate: timeOffRequests.startDate,
       endDate: timeOffRequests.endDate,
+      unavailableStartMinute: timeOffRequests.unavailableStartMinute,
+      unavailableEndMinute: timeOffRequests.unavailableEndMinute,
     })
 
   if (reviewed.length === 0) {
     redirect('/admin?error=request-not-found#requests')
   }
 
-  const [{ userId, startDate, endDate }] = reviewed
+  const [{ userId, startDate, endDate, unavailableStartMinute, unavailableEndMinute }] = reviewed
+  const windowLabel = formatTimeOffWindow({ unavailableStartMinute, unavailableEndMinute })
   await notifyUsers([
     {
       userId,
       title: `Time-off ${nextStatus}`,
-      body: `Your time-off request (${dateLabel.format(startDate)} to ${dateLabel.format(endDate)}) was ${nextStatus}.`,
+      body: `Your time-off request (${dateLabel.format(startDate)} to ${dateLabel.format(endDate)} · ${windowLabel}) was ${nextStatus}.`,
       link: '/dashboard#request-time-off',
     },
   ])
@@ -1892,6 +1896,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       userName: users.name,
       startDate: timeOffRequests.startDate,
       endDate: timeOffRequests.endDate,
+      unavailableStartMinute: timeOffRequests.unavailableStartMinute,
+      unavailableEndMinute: timeOffRequests.unavailableEndMinute,
       reason: timeOffRequests.reason,
       createdAt: timeOffRequests.createdAt,
     })
@@ -2535,6 +2541,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             <p className="font-medium">{request.userName ?? 'Unknown user'}</p>
                             <p className="text-sm text-muted-foreground">
                               {dateLabel.format(request.startDate)} – {dateLabel.format(request.endDate)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatTimeOffWindow({
+                                unavailableStartMinute: request.unavailableStartMinute,
+                                unavailableEndMinute: request.unavailableEndMinute,
+                              })}
                             </p>
                             {request.reason ? <p className="text-sm mt-1">{request.reason}</p> : null}
                           </div>

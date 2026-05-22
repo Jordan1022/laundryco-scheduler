@@ -104,12 +104,27 @@ export const assignmentsRelations = relations(assignments, ({ one }) => ({
   }),
 }))
 
-// Time-off requests
+// Time-off requests.
+//
+// `startDate` / `endDate` are INCLUSIVE date bounds: `endDate = May 15`
+// means "May 15 is off." When checking whether a shift conflicts with a
+// request, the upper bound is `endDate + 1 day` (exclusive), NOT `endDate`
+// (inclusive). Equivalently: any shift whose calendar date in the business
+// TZ falls in [startDate, endDate] is covered.
+//
+// `unavailableStartMinute` / `unavailableEndMinute` describe the
+// minute-of-day window on each covered day. [0, 1440) = all day.
+// [0, 960) = unavailable before 16:00 (the early shift only). [960, 1440) =
+// unavailable from 16:00 onward (the late shift only). The minute model
+// survives schedule reshaping; see lib/timeOff.ts for presets and overlap
+// helpers.
 export const timeOffRequests = pgTable('time_off_requests', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id).notNull(),
   startDate: timestamp('start_date', { mode: 'date' }).notNull(),
   endDate: timestamp('end_date', { mode: 'date' }).notNull(),
+  unavailableStartMinute: integer('unavailable_start_minute').notNull().default(0),
+  unavailableEndMinute: integer('unavailable_end_minute').notNull().default(1440),
   reason: text('reason'),
   status: text('status').default('pending'), // 'pending', 'approved', 'denied'
   reviewedBy: uuid('reviewed_by').references(() => users.id),
