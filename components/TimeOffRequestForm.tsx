@@ -59,6 +59,7 @@ export default function TimeOffRequestForm({
               id="startDate"
               name="startDate"
               value={startDate}
+              min={defaultDate}
               ariaLabel="From"
               required
               onChange={(event) => {

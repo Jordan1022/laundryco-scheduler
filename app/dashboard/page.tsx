@@ -210,10 +210,13 @@ async function requestTimeOffAction(formData: FormData) {
     redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'invalid-timeoff-dates', hash: 'request-time-off' }))
   }
 
-  // Past-date guard: anchor "today" to Chicago midnight so a request submitted
-  // at 11pm Chicago doesn't accidentally reject the same calendar day.
+  // Past-date guard: reject if the request STARTS before today (Chicago).
+  // Anchor "today" to Chicago midnight so an 11pm Chicago submission doesn't
+  // accidentally reject the same calendar day. Guarding endDate would let a
+  // multi-day range silently cover hundreds of past shifts as long as the
+  // end fell today-or-later.
   const todayChicago = parseChicagoDate(chicagoDateInputValue(new Date()))
-  if (todayChicago && endDate < todayChicago) {
+  if (todayChicago && startDate < todayChicago) {
     redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'timeoff-in-past', hash: 'request-time-off' }))
   }
 
