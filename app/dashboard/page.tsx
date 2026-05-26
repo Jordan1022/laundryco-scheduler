@@ -1194,7 +1194,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </div>
               ) : null}
               <TimeOffRequestForm
-                defaultDate={formatDateParam(now)}
+                defaultDate={chicagoDateInputValue(now)}
                 returnView={selectedView}
                 returnDate={formatDateParam(anchorDate)}
                 formAction={requestTimeOffAction}
