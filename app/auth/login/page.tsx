@@ -41,7 +41,7 @@ export default function LoginPage() {
       return
     }
 
-    setFormError('Those credentials don’t match a ticket on file. Try again.')
+    setFormError('Incorrect email or password. Please try again.')
   }
 
   return (

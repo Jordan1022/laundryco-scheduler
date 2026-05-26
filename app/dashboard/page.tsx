@@ -10,14 +10,20 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import SignOutButton from '@/components/SignOutButton'
 import BrowserAlertToggle from '@/components/BrowserAlertToggle'
-import { DatePickerField } from '@/components/ui/date-time-picker'
 import { Brandmark } from '@/components/ui/Brandmark'
 import { TicketCard, TicketRow, Stamp } from '@/components/ui/TicketCard'
 import ConfirmSubmitButton from '@/components/ConfirmSubmitButton'
 import { notifyRoles, notifyUsers } from '@/lib/notifications'
 import ScheduleGridWithModal from '@/components/ScheduleGridWithModal'
+import TimeOffRequestForm, { type SubmittedTimeOffRequest } from '@/components/TimeOffRequestForm'
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
-import { BUSINESS_TZ, parseChicagoWalltime } from '@/lib/time'
+import { BUSINESS_TZ, chicagoDateInputValue, parseChicagoWalltime } from '@/lib/time'
+import {
+  formatTimeOffWindow,
+  normalizeTimeOffPresetKey,
+  timeOffRequestsConflict,
+  timeOffWindowForPreset,
+} from '@/lib/timeOff'
 
 const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: BUSINESS_TZ })
@@ -133,7 +139,14 @@ async function requireAuthenticatedSession() {
   return session
 }
 
-function parseISODateOnly(value: string) {
+/**
+ * Parse a "YYYY-MM-DD" string as midnight in the business TZ (Chicago).
+ * The returned Date is the real UTC instant of Chicago midnight on that
+ * calendar day — round-trips cleanly through `timestamp` columns and
+ * Chicago-zone Intl formatters. Distinct in semantics from the local-TZ
+ * `parseISODateOnlyAsLocal` exported by the date-time picker.
+ */
+function parseChicagoDate(value: string) {
   return parseChicagoWalltime(value, '00:00')
 }
 
@@ -177,6 +190,8 @@ function getReturnContext(formData: FormData) {
   return { returnView, returnDate }
 }
 
+const TIME_OFF_REASON_MAX_LENGTH = 500
+
 async function requestTimeOffAction(formData: FormData) {
   'use server'
 
@@ -184,27 +199,67 @@ async function requestTimeOffAction(formData: FormData) {
   const { returnView, returnDate } = getReturnContext(formData)
   const startDateRaw = String(formData.get('startDate') ?? '')
   const endDateRaw = String(formData.get('endDate') ?? '')
-  const reason = String(formData.get('reason') ?? '').trim()
+  const presetRaw = String(formData.get('preset') ?? 'all_day')
+  const reasonRaw = String(formData.get('reason') ?? '').trim()
+  const reason = reasonRaw.slice(0, TIME_OFF_REASON_MAX_LENGTH)
 
-  const startDate = parseISODateOnly(startDateRaw)
-  const endDate = parseISODateOnly(endDateRaw)
-  if (!startDate || !endDate || endDate < startDate) {
+  const startDate = parseChicagoDate(startDateRaw)
+  const endDate = parseChicagoDate(endDateRaw)
+  const presetKey = normalizeTimeOffPresetKey(presetRaw)
+  if (!startDate || !endDate || endDate < startDate || !presetKey) {
     redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'invalid-timeoff-dates', hash: 'request-time-off' }))
+  }
+
+  // Past-date guard: reject if the request STARTS before today (Chicago).
+  // Anchor "today" to Chicago midnight so an 11pm Chicago submission doesn't
+  // accidentally reject the same calendar day. Guarding endDate would let a
+  // multi-day range silently cover hundreds of past shifts as long as the
+  // end fell today-or-later.
+  const todayChicago = parseChicagoDate(chicagoDateInputValue(new Date()))
+  if (todayChicago && startDate < todayChicago) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'timeoff-in-past', hash: 'request-time-off' }))
+  }
+
+  const window = timeOffWindowForPreset(presetKey)
+
+  // Overlap guard: a pending or approved request for this user that covers
+  // any shared (date, minute) cell would create ambiguous coverage. Block
+  // at submit and direct the user to amend the existing slip instead.
+  const existing = await db.select({
+    id: timeOffRequests.id,
+    startDate: timeOffRequests.startDate,
+    endDate: timeOffRequests.endDate,
+    unavailableStartMinute: timeOffRequests.unavailableStartMinute,
+    unavailableEndMinute: timeOffRequests.unavailableEndMinute,
+  })
+    .from(timeOffRequests)
+    .where(and(
+      eq(timeOffRequests.userId, session.user.id),
+      inArray(timeOffRequests.status, ['pending', 'approved']),
+    ))
+
+  const incoming = { startDate, endDate, ...window }
+  const conflicts = existing.some((row) => timeOffRequestsConflict(incoming, row))
+  if (conflicts) {
+    redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'timeoff-overlaps', hash: 'request-time-off' }))
   }
 
   await db.insert(timeOffRequests).values({
     userId: session.user.id,
     startDate,
     endDate,
+    unavailableStartMinute: window.unavailableStartMinute,
+    unavailableEndMinute: window.unavailableEndMinute,
     reason: reason || null,
     status: 'pending',
   })
 
   const requestedDateRange = `${shortDateLabel.format(startDate)} to ${shortDateLabel.format(endDate)}`
+  const requestedScope = formatTimeOffWindow(window)
   await notifyRoles({
     roles: ['manager', 'admin'],
     title: `Time-off request from ${session.user.name}`,
-    body: `${session.user.name} requested ${requestedDateRange}${reason ? ` (${reason})` : ''}.`,
+    body: `${session.user.name} requested ${requestedDateRange} · ${requestedScope}${reason ? ` (${reason})` : ''}.`,
     link: '/admin#requests',
   })
 
@@ -591,6 +646,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     notificationRows,
     unreadNotificationsCountRow,
     schedulableStaffRows,
+    userTimeOffRows,
   ] = await Promise.all([
     db.select({
       shiftId: shifts.id,
@@ -693,6 +749,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           .where(ne(users.role, 'inactive'))
           .orderBy(users.name)
       : Promise.resolve([]),
+    db.select({
+      id: timeOffRequests.id,
+      startDate: timeOffRequests.startDate,
+      endDate: timeOffRequests.endDate,
+      unavailableStartMinute: timeOffRequests.unavailableStartMinute,
+      unavailableEndMinute: timeOffRequests.unavailableEndMinute,
+      status: timeOffRequests.status,
+      createdAt: timeOffRequests.createdAt,
+    })
+      .from(timeOffRequests)
+      .where(and(
+        eq(timeOffRequests.userId, session.user.id),
+        inArray(timeOffRequests.status, ['pending', 'approved']),
+      ))
+      .orderBy(desc(timeOffRequests.startDate))
+      .limit(10),
   ])
 
   type ShiftWithAssignees = {
@@ -742,6 +814,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const thisWeekHours = thisWeekShiftRows.reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0)
   const teamCount = teamRows.length
   const unreadNotificationsCount = unreadNotificationsCountRow?.value ?? 0
+  const submittedTimeOffRequests: SubmittedTimeOffRequest[] = userTimeOffRows.flatMap((request) => {
+    if (request.status !== 'pending' && request.status !== 'approved') return []
+
+    return [{
+      id: request.id,
+      dateRangeLabel: request.startDate.getTime() === request.endDate.getTime()
+        ? shortDateLabel.format(request.startDate)
+        : `${shortDateLabel.format(request.startDate)} – ${shortDateLabel.format(request.endDate)}`,
+      windowLabel: formatTimeOffWindow({
+        unavailableStartMinute: request.unavailableStartMinute,
+        unavailableEndMinute: request.unavailableEndMinute,
+      }),
+      status: request.status,
+      submittedAtLabel: request.createdAt ? dateTimeLabel.format(request.createdAt) : 'recently',
+    }]
+  })
   const formStatus = getQueryValue(searchParams?.status)
   const formError = getQueryValue(searchParams?.error)
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || ''
@@ -1095,31 +1183,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   End date must be on or after start date.
                 </div>
               ) : null}
-              <form action={requestTimeOffAction} className="space-y-4">
-                <input type="hidden" name="returnView" value={selectedView} />
-                <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label htmlFor="startDate" className="stamp text-ink/60">From</label>
-                    <DatePickerField id="startDate" name="startDate" defaultValue={formatDateParam(now)} required />
-                  </div>
-                  <div className="space-y-1">
-                    <label htmlFor="endDate" className="stamp text-ink/60">Through</label>
-                    <DatePickerField id="endDate" name="endDate" defaultValue={formatDateParam(now)} required />
-                  </div>
+              {formError === 'timeoff-in-past' ? (
+                <div className="mb-3 rounded-sm border border-cherry/40 bg-cherry-soft px-3 py-2 text-xs text-cherry">
+                  Time-off must be for today or a future date.
                 </div>
-                <div className="space-y-1">
-                  <label htmlFor="reason" className="stamp text-ink/60">Reason (optional)</label>
-                  <textarea
-                    id="reason"
-                    name="reason"
-                    rows={3}
-                    className="flex w-full rounded-sm border border-ink/20 bg-paper px-3 py-2 text-sm focus:border-ink focus:outline-none"
-                    placeholder="Vacation, appointment, personal day…"
-                  />
+              ) : null}
+              {formError === 'timeoff-overlaps' ? (
+                <div className="mb-3 rounded-sm border border-cherry/40 bg-cherry-soft px-3 py-2 text-xs text-cherry">
+                  This request overlaps a pending or approved slip. Amend that one instead.
                 </div>
-                <Button type="submit" className="w-full">Submit time-off slip</Button>
-              </form>
+              ) : null}
+              <TimeOffRequestForm
+                defaultDate={chicagoDateInputValue(now)}
+                returnView={selectedView}
+                returnDate={formatDateParam(anchorDate)}
+                formAction={requestTimeOffAction}
+                submittedRequests={submittedTimeOffRequests}
+              />
             </TicketCard>
           </div>
 

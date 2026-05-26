@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { DatePickerField, TimePickerField } from '@/components/ui/date-time-picker'
 import ConfirmSubmitButton from '@/components/ConfirmSubmitButton'
 import { STANDARD_SCHEDULE_DEFAULTS, STANDARD_SCHEDULE_HORIZON_DAYS } from '@/lib/standardSchedule'
+import { serverActionFormProps } from '@/lib/serverActionForm'
 
 type StaffOption = { id: string; name: string; role: string }
 
@@ -22,7 +23,7 @@ export default function StandardScheduleForm({
 }: StandardScheduleFormProps) {
   return (
     <div className="space-y-8">
-      <form action={applyAction} className="space-y-4">
+      <form {...serverActionFormProps(applyAction)} className="space-y-4">
         <div>
           <h3 className="text-sm font-semibold">Apply standard schedule</h3>
           <p className="text-xs text-muted-foreground">
@@ -184,7 +185,7 @@ export default function StandardScheduleForm({
       </form>
 
       <div className="border-t pt-6">
-        <form action={clearAction} className="space-y-4">
+        <form {...serverActionFormProps(clearAction)} className="space-y-4">
           <div>
             <h3 className="text-sm font-semibold">Clear future shifts</h3>
             <p className="text-xs text-muted-foreground">

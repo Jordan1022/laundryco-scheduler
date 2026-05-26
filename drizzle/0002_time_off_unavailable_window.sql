@@ -1,0 +1,2 @@
+ALTER TABLE "time_off_requests" ADD COLUMN "unavailable_start_minute" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "time_off_requests" ADD COLUMN "unavailable_end_minute" integer DEFAULT 1440 NOT NULL;
