@@ -30,8 +30,8 @@ self.addEventListener('push', (event) => {
       data: { url },
       tag: 'laundryco-scheduler-notification',
       renotify: true,
-      badge: '/favicon.ico',
-      icon: '/favicon.ico',
+      badge: '/icon.png',
+      icon: '/icon.png',
     })
   })())
 })
