@@ -26,6 +26,8 @@ const openShift = {
   location: 'North Dock',
   startLabel: '16:00',
   endLabel: '20:00',
+  startMinute: 16 * 60,
+  endMinute: 20 * 60,
   dateTimeLabel: 'Thu Apr 16, 2026, 4:00 PM - 8:00 PM',
   assigneeLabel: 'Open',
   assignedUserId: null,
@@ -127,6 +129,55 @@ describe('ScheduleGridWithModal', () => {
     const shiftInput = form!.querySelector('input[name="shiftId"]') as HTMLInputElement
     expect(shiftInput.value).toBe('shift-2')
     expect(screen.getByRole('button', { name: 'Fill' })).toBeInTheDocument()
+  })
+
+  it('disables staff who are unavailable for the selected shift window', async () => {
+    const user = userEvent.setup()
+
+    const openDay = {
+      ...baseDay,
+      shiftCount: 1,
+      visibleShifts: [openShift],
+      shifts: [openShift],
+    }
+
+    render(
+      <ScheduleGridWithModal
+        weekdayLabels={['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']}
+        selectedView="week"
+        dayEntries={[openDay]}
+        canManageStaff
+        staffOptions={[
+          { id: 'user-alice', name: 'Alice', role: 'employee' },
+          {
+            id: 'user-bob',
+            name: 'Bob',
+            role: 'employee',
+            unavailableWindows: [{
+              startDate: '2026-04-16',
+              endDate: '2026-04-16',
+              unavailableStartMinute: 16 * 60,
+              unavailableEndMinute: 20 * 60,
+              reason: null,
+            }],
+          } as any,
+        ]}
+        returnView="week"
+        returnDate="2026-04-16"
+        assignShiftAction={vi.fn()}
+      />,
+    )
+
+    const tiles = screen.getAllByRole('button', { name: /Open · needs staff 16:00.*20:00/i })
+    await user.click(tiles[0])
+
+    const select = screen.getByLabelText('Assign to') as HTMLSelectElement
+    const aliceOption = screen.getByRole('option', { name: 'Alice (employee)' }) as HTMLOptionElement
+    const bobOption = screen.getByRole('option', { name: 'Bob (employee) - On vacation' }) as HTMLOptionElement
+
+    expect(Array.from(select.options).map((option) => option.value)).toEqual(['', 'user-alice', 'user-bob'])
+    expect(aliceOption.disabled).toBe(false)
+    expect(bobOption.disabled).toBe(true)
   })
 
   it('does not render the inline assign form when the user cannot manage staff', async () => {

@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { and, count, desc, eq, gte, inArray, isNull, lt, ne, or } from 'drizzle-orm'
+import { and, count, desc, eq, gte, inArray, isNull, lt, lte, ne, or } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { assignments, notifications, shiftSwapRequests, shifts, timeOffRequests, users } from '@/lib/schema'
 import { Button } from '@/components/ui/button'
@@ -17,10 +17,11 @@ import { notifyRoles, notifyUsers } from '@/lib/notifications'
 import ScheduleGridWithModal from '@/components/ScheduleGridWithModal'
 import TimeOffRequestForm, { type SubmittedTimeOffRequest } from '@/components/TimeOffRequestForm'
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
-import { BUSINESS_TZ, chicagoDateInputValue, parseChicagoWalltime } from '@/lib/time'
+import { BUSINESS_TZ, chicagoDateInputValue, chicagoTimeInputValue, parseChicagoWalltime } from '@/lib/time'
 import {
   formatTimeOffWindow,
   normalizeTimeOffPresetKey,
+  timeOffRequestCoversShiftWindow,
   timeOffRequestsConflict,
   timeOffWindowForPreset,
 } from '@/lib/timeOff'
@@ -161,6 +162,43 @@ function parseTimeToMinutes(timeValue: string) {
   if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
   if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null
   return (hours * 60) + minutes
+}
+
+function shiftMinutes(date: Date) {
+  return parseTimeToMinutes(chicagoTimeInputValue(date))
+}
+
+async function userHasApprovedTimeOffForShift(userId: string, startTime: Date, endTime: Date) {
+  const date = chicagoDateInputValue(startTime)
+  const day = parseChicagoDate(date)
+  const startMinute = shiftMinutes(startTime)
+  const endMinute = shiftMinutes(endTime)
+  if (!day || startMinute === null || endMinute === null) return false
+
+  const rows = await db.select({
+    startDate: timeOffRequests.startDate,
+    endDate: timeOffRequests.endDate,
+    unavailableStartMinute: timeOffRequests.unavailableStartMinute,
+    unavailableEndMinute: timeOffRequests.unavailableEndMinute,
+  })
+    .from(timeOffRequests)
+    .where(and(
+      eq(timeOffRequests.userId, userId),
+      eq(timeOffRequests.status, 'approved'),
+      lte(timeOffRequests.startDate, day),
+      gte(timeOffRequests.endDate, day),
+    ))
+
+  return rows.some((row) => timeOffRequestCoversShiftWindow({
+    startDate: chicagoDateInputValue(row.startDate),
+    endDate: chicagoDateInputValue(row.endDate),
+    unavailableStartMinute: row.unavailableStartMinute,
+    unavailableEndMinute: row.unavailableEndMinute,
+  }, {
+    date,
+    startMinute,
+    endMinute,
+  }))
 }
 
 function buildDashboardReturnUrl(
@@ -395,16 +433,6 @@ async function createShiftFromCalendarAction(formData: FormData) {
     redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-after-hours', hash: 'schedule' }))
   }
 
-  const [newShift] = await db.insert(shifts).values({
-    title,
-    location,
-    notes: notes || null,
-    startTime: startDateTime,
-    endTime: endDateTime,
-    status,
-    createdBy: session.user.id,
-  }).returning({ id: shifts.id })
-
   let assignmentCreatedForUserId: string | null = null
   if (assignedUserId) {
     const [matchingUser] = await db.select({ id: users.id })
@@ -416,6 +444,22 @@ async function createShiftFromCalendarAction(formData: FormData) {
       redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-invalid-assignee', hash: 'schedule' }))
     }
 
+    if (await userHasApprovedTimeOffForShift(assignedUserId, startDateTime, endDateTime)) {
+      redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-assignee-unavailable', hash: 'schedule' }))
+    }
+  }
+
+  const [newShift] = await db.insert(shifts).values({
+    title,
+    location,
+    notes: notes || null,
+    startTime: startDateTime,
+    endTime: endDateTime,
+    status,
+    createdBy: session.user.id,
+  }).returning({ id: shifts.id })
+
+  if (assignedUserId) {
     await db.insert(assignments).values({
       shiftId: newShift.id,
       userId: assignedUserId,
@@ -482,6 +526,10 @@ async function assignShiftFromCalendarAction(formData: FormData) {
       .limit(1)
     if (!matchingUser) {
       redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-invalid-assignee', hash: 'schedule' }))
+    }
+
+    if (await userHasApprovedTimeOffForShift(assignedUserId, shiftRow.startTime, shiftRow.endTime)) {
+      redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-assignee-unavailable', hash: 'schedule' }))
     }
 
     const alreadyAssigned = existingAssignedRows.find((row) => row.userId === assignedUserId)
@@ -635,6 +683,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const scheduleRangeStart = selectedView === 'month' ? calendarStart : selectedWeekStart
   const scheduleRangeEnd = selectedView === 'month' ? calendarEnd : selectedWeekEnd
+  const scheduleTimeOffStart = parseChicagoDate(formatDateParam(scheduleRangeStart)) ?? scheduleRangeStart
+  const scheduleTimeOffEnd = parseChicagoDate(formatDateParam(addDays(scheduleRangeEnd, -1))) ?? addDays(scheduleRangeEnd, -1)
 
   const [
     scheduledShiftRows,
@@ -647,6 +697,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     unreadNotificationsCountRow,
     schedulableStaffRows,
     userTimeOffRows,
+    staffTimeOffRows,
   ] = await Promise.all([
     db.select({
       shiftId: shifts.id,
@@ -765,6 +816,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       ))
       .orderBy(desc(timeOffRequests.startDate))
       .limit(10),
+    canManageStaff
+      ? db.select({
+          userId: timeOffRequests.userId,
+          startDate: timeOffRequests.startDate,
+          endDate: timeOffRequests.endDate,
+          unavailableStartMinute: timeOffRequests.unavailableStartMinute,
+          unavailableEndMinute: timeOffRequests.unavailableEndMinute,
+          reason: timeOffRequests.reason,
+        })
+          .from(timeOffRequests)
+          .where(and(
+            eq(timeOffRequests.status, 'approved'),
+            lte(timeOffRequests.startDate, scheduleTimeOffEnd),
+            gte(timeOffRequests.endDate, scheduleTimeOffStart),
+          ))
+      : Promise.resolve([]),
   ])
 
   type ShiftWithAssignees = {
@@ -814,6 +881,28 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const thisWeekHours = thisWeekShiftRows.reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0)
   const teamCount = teamRows.length
   const unreadNotificationsCount = unreadNotificationsCountRow?.value ?? 0
+  const staffTimeOffByUserId = new Map<string, Array<{
+    startDate: string
+    endDate: string
+    unavailableStartMinute: number
+    unavailableEndMinute: number
+    reason: string | null
+  }>>()
+  for (const row of staffTimeOffRows) {
+    const windows = staffTimeOffByUserId.get(row.userId) ?? []
+    windows.push({
+      startDate: chicagoDateInputValue(row.startDate),
+      endDate: chicagoDateInputValue(row.endDate),
+      unavailableStartMinute: row.unavailableStartMinute,
+      unavailableEndMinute: row.unavailableEndMinute,
+      reason: row.reason,
+    })
+    staffTimeOffByUserId.set(row.userId, windows)
+  }
+  const schedulableStaffOptions = schedulableStaffRows.map((staff) => ({
+    ...staff,
+    unavailableWindows: staffTimeOffByUserId.get(staff.id) ?? [],
+  }))
   const submittedTimeOffRequests: SubmittedTimeOffRequest[] = userTimeOffRows.flatMap((request) => {
     if (request.status !== 'pending' && request.status !== 'approved') return []
 
@@ -853,6 +942,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         location: shift.location ?? '',
         startLabel: shortTimeLabel.format(shift.startTime),
         endLabel: shortTimeLabel.format(shift.endTime),
+        startMinute: shiftMinutes(shift.startTime) ?? undefined,
+        endMinute: shiftMinutes(shift.endTime) ?? undefined,
         dateTimeLabel: formatShiftDateTime(shift.startTime, shift.endTime),
         assigneeLabel,
         assignedUserId: shift.assignees[0]?.userId ?? null,
@@ -1061,6 +1152,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               {formError === 'calendar-invalid-time' && 'Shift end time must be after start time.'}
               {formError === 'calendar-after-hours' && 'Store closes at 8:00 PM. Shifts must end by 8:00 PM.'}
               {formError === 'calendar-invalid-assignee' && 'The selected assignee does not exist.'}
+              {formError === 'calendar-assignee-unavailable' && 'That person has approved time off during this shift.'}
               {formError === 'calendar-invalid-shift' && 'That shift no longer exists.'}
             </div>
           ) : null}
@@ -1071,7 +1163,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               weekdayLabels={weekdayLabels}
               dayEntries={dayEntries}
               canManageStaff={canManageStaff}
-              staffOptions={schedulableStaffRows}
+              staffOptions={schedulableStaffOptions}
               returnView={selectedView}
               returnDate={formatDateParam(anchorDate)}
               createShiftAction={canManageStaff ? createShiftFromCalendarAction : undefined}

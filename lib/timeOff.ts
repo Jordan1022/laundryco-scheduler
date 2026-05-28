@@ -30,6 +30,17 @@ export type TimeOffWindow = {
   unavailableEndMinute: number
 }
 
+export type TimeOffDateWindow = TimeOffWindow & {
+  startDate: string
+  endDate: string
+}
+
+export type ShiftMinuteWindow = {
+  date: string
+  startMinute: number
+  endMinute: number
+}
+
 export type TimeOffPresetKey = 'all_day' | 'early' | 'late'
 
 type Preset = TimeOffWindow & { label: string }
@@ -109,6 +120,19 @@ export function formatTimeOffWindow(window: TimeOffWindow): string {
 /** Half-open minute windows overlap iff each starts before the other ends. */
 export function timeOffWindowsOverlap(a: TimeOffWindow, b: TimeOffWindow): boolean {
   return a.unavailableStartMinute < b.unavailableEndMinute && b.unavailableStartMinute < a.unavailableEndMinute
+}
+
+export function timeOffRequestCoversShiftWindow(
+  request: TimeOffDateWindow,
+  shift: ShiftMinuteWindow,
+): boolean {
+  if (shift.startMinute >= shift.endMinute) return false
+  if (request.startDate > shift.date || shift.date > request.endDate) return false
+
+  return timeOffWindowsOverlap(request, {
+    unavailableStartMinute: shift.startMinute,
+    unavailableEndMinute: shift.endMinute,
+  })
 }
 
 /** Inclusive date ranges overlap iff each starts on or before the other ends. */

@@ -38,6 +38,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   'edit-after-hours': 'Store closes at 8:00 PM. Shifts must end by 8:00 PM.',
   'invalid-shift': 'Shift not found or no longer editable.',
   'invalid-assignee': 'The selected assignee does not exist.',
+  'assignee-unavailable': 'That person has approved time off during this shift.',
   'standard-missing-fields': 'Start date and every shift time are required.',
   'standard-invalid-time': 'Each shift’s end time must be after its start time.',
   'standard-after-hours': 'Store closes at 8:00 PM. All shifts must end by 8:00 PM.',

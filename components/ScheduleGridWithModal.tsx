@@ -8,6 +8,7 @@ import { TimePickerField } from '@/components/ui/date-time-picker'
 import ConfirmSubmitButton from '@/components/ConfirmSubmitButton'
 import { cn } from '@/lib/utils'
 import { serverActionFormProps } from '@/lib/serverActionForm'
+import { timeOffRequestCoversShiftWindow, type TimeOffDateWindow } from '@/lib/timeOff'
 
 type DayShift = {
   shiftId: string
@@ -15,6 +16,8 @@ type DayShift = {
   location: string
   startLabel: string
   endLabel: string
+  startMinute?: number
+  endMinute?: number
   dateTimeLabel: string
   assigneeLabel: string
   assignedUserId: string | null
@@ -39,6 +42,11 @@ type StaffOption = {
   id: string
   name: string
   role: string
+  unavailableWindows?: StaffUnavailableWindow[]
+}
+
+type StaffUnavailableWindow = TimeOffDateWindow & {
+  reason: string | null
 }
 
 type ScheduleGridWithModalProps = {
@@ -56,6 +64,47 @@ type ScheduleGridWithModalProps = {
 
 type ActiveShift = { dayKey: string; shiftId: string }
 
+function getUnavailableDisplayReason(reason: string | null) {
+  const trimmed = reason?.trim()
+  return trimmed ? `Unavailable: ${trimmed}` : 'On vacation'
+}
+
+function getStaffUnavailableReason(
+  staff: StaffOption,
+  dateIso: string,
+  startMinute?: number | null,
+  endMinute?: number | null,
+) {
+  if (startMinute === null || endMinute === null || startMinute === undefined || endMinute === undefined) return null
+  if (startMinute >= endMinute) return null
+
+  const conflict = staff.unavailableWindows?.find((window) => (
+    timeOffRequestCoversShiftWindow(window, {
+      date: dateIso,
+      startMinute,
+      endMinute,
+    })
+  ))
+
+  return conflict ? getUnavailableDisplayReason(conflict.reason) : null
+}
+
+function formatStaffOptionLabel(staff: StaffOption, unavailableReason: string | null) {
+  const base = `${staff.name} (${staff.role})`
+  return unavailableReason ? `${base} - ${unavailableReason}` : base
+}
+
+function timeValueToMinutes(value: string) {
+  const match = /^(\d{2}):(\d{2})$/.exec(value)
+  if (!match) return null
+
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null
+  return (hours * 60) + minutes
+}
+
 export default function ScheduleGridWithModal({
   weekdayLabels,
   selectedView,
@@ -71,6 +120,8 @@ export default function ScheduleGridWithModal({
   const [activeShift, setActiveShift] = useState<ActiveShift | null>(null)
   const [createDayKey, setCreateDayKey] = useState<string | null>(null)
   const [overflowDayKey, setOverflowDayKey] = useState<string | null>(null)
+  const [createStartTime, setCreateStartTime] = useState('16:00')
+  const [createEndTime, setCreateEndTime] = useState('20:00')
 
   const activeShiftContext = useMemo(() => {
     if (!activeShift) return null
@@ -99,6 +150,12 @@ export default function ScheduleGridWithModal({
   const openShift = (dayKey: string, shiftId: string) => {
     setOverflowDayKey(null)
     setActiveShift({ dayKey, shiftId })
+  }
+
+  const openCreateShift = (dayKey: string) => {
+    setCreateStartTime('16:00')
+    setCreateEndTime('20:00')
+    setCreateDayKey(dayKey)
   }
 
   return (
@@ -151,7 +208,7 @@ export default function ScheduleGridWithModal({
                     variant="outline"
                     size="sm"
                     className="w-full"
-                    onClick={() => setCreateDayKey(day.key)}
+                    onClick={() => openCreateShift(day.key)}
                   >
                     <Plus className="mr-1 h-3.5 w-3.5" /> Add shift
                   </Button>
@@ -200,7 +257,7 @@ export default function ScheduleGridWithModal({
                         type="button"
                         aria-label={`Add shift on ${day.dateLabel}`}
                         title="Add shift"
-                        onClick={() => setCreateDayKey(day.key)}
+                        onClick={() => openCreateShift(day.key)}
                         className="inline-flex h-5 w-5 items-center justify-center rounded-sm border border-ink/15 bg-ink/5 text-ink/70 hover:bg-ink/10 hover:text-ink"
                       >
                         <Plus className="h-3.5 w-3.5" />
@@ -286,11 +343,20 @@ export default function ScheduleGridWithModal({
                   {activeShiftContext.shift.isOpen ? (
                     <option value="">Unassigned</option>
                   ) : null}
-                  {staffOptions.map((staff) => (
-                    <option key={staff.id} value={staff.id}>
-                      {staff.name} ({staff.role})
-                    </option>
-                  ))}
+                  {staffOptions.map((staff) => {
+                    const unavailable = getStaffUnavailableReason(
+                      staff,
+                      activeShiftContext.day.dateIso,
+                      activeShiftContext.shift.startMinute,
+                      activeShiftContext.shift.endMinute,
+                    )
+                    const isCurrentAssignee = staff.id === activeShiftContext.shift.assignedUserId
+                    return (
+                      <option key={staff.id} value={staff.id} disabled={Boolean(unavailable) && !isCurrentAssignee}>
+                        {formatStaffOptionLabel(staff, unavailable)}
+                      </option>
+                    )
+                  })}
                 </select>
               </div>
               <Button type="submit" size="sm">
@@ -398,9 +464,10 @@ export default function ScheduleGridWithModal({
               <TimePickerField
                 id="calendar-shift-start"
                 name="startTime"
-                defaultValue="16:00"
+                value={createStartTime}
                 max="19:59"
                 required
+                onChange={(event) => setCreateStartTime(event.currentTarget.value)}
               />
             </div>
             <div className="space-y-1">
@@ -408,9 +475,10 @@ export default function ScheduleGridWithModal({
               <TimePickerField
                 id="calendar-shift-end"
                 name="endTime"
-                defaultValue="20:00"
+                value={createEndTime}
                 max="20:00"
                 required
+                onChange={(event) => setCreateEndTime(event.currentTarget.value)}
               />
             </div>
             <div className="space-y-1">
@@ -422,11 +490,19 @@ export default function ScheduleGridWithModal({
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
                 <option value="">Unassigned (leave open)</option>
-                {staffOptions.map((staff) => (
-                  <option key={staff.id} value={staff.id}>
-                    {staff.name} ({staff.role})
-                  </option>
-                ))}
+                {staffOptions.map((staff) => {
+                  const unavailable = getStaffUnavailableReason(
+                    staff,
+                    createDay.dateIso,
+                    timeValueToMinutes(createStartTime),
+                    timeValueToMinutes(createEndTime),
+                  )
+                  return (
+                    <option key={staff.id} value={staff.id} disabled={Boolean(unavailable)}>
+                      {formatStaffOptionLabel(staff, unavailable)}
+                    </option>
+                  )
+                })}
               </select>
             </div>
             <div className="space-y-1">

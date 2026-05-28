@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { and, count, desc, eq, gte, inArray, lt, ne } from 'drizzle-orm'
+import { and, count, desc, eq, gte, inArray, lt, lte, ne } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { assignments, auditLog, shiftSwapRequests, shifts, timeOffRequests, users } from '@/lib/schema'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,7 +28,7 @@ import { notifyUsers } from '@/lib/notifications'
 import { sendOnboardingEmail } from '@/lib/onboarding'
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
 import { BUSINESS_TZ, chicagoDateInputValue, chicagoTimeInputValue, parseChicagoWalltime } from '@/lib/time'
-import { formatTimeOffWindow } from '@/lib/timeOff'
+import { formatTimeOffWindow, timeOffRequestCoversShiftWindow } from '@/lib/timeOff'
 import {
   STANDARD_SCHEDULE_HORIZON_DAYS,
   buildStandardShiftInputs,
@@ -92,6 +92,43 @@ function parseTimeToMinutes(timeValue: string) {
   return (hours * 60) + minutes
 }
 
+function shiftMinutes(date: Date) {
+  return parseTimeToMinutes(chicagoTimeInputValue(date))
+}
+
+async function userHasApprovedTimeOffForShift(userId: string, startTime: Date, endTime: Date) {
+  const date = chicagoDateInputValue(startTime)
+  const day = parseDateOnly(date)
+  const startMinute = shiftMinutes(startTime)
+  const endMinute = shiftMinutes(endTime)
+  if (!day || startMinute === null || endMinute === null) return false
+
+  const rows = await db.select({
+    startDate: timeOffRequests.startDate,
+    endDate: timeOffRequests.endDate,
+    unavailableStartMinute: timeOffRequests.unavailableStartMinute,
+    unavailableEndMinute: timeOffRequests.unavailableEndMinute,
+  })
+    .from(timeOffRequests)
+    .where(and(
+      eq(timeOffRequests.userId, userId),
+      eq(timeOffRequests.status, 'approved'),
+      lte(timeOffRequests.startDate, day),
+      gte(timeOffRequests.endDate, day),
+    ))
+
+  return rows.some((row) => timeOffRequestCoversShiftWindow({
+    startDate: chicagoDateInputValue(row.startDate),
+    endDate: chicagoDateInputValue(row.endDate),
+    unavailableStartMinute: row.unavailableStartMinute,
+    unavailableEndMinute: row.unavailableEndMinute,
+  }, {
+    date,
+    startMinute,
+    endMinute,
+  }))
+}
+
 function isValidActiveRole(role: string): role is ActiveRole {
   return ACTIVE_ROLES.includes(role as ActiveRole)
 }
@@ -144,6 +181,22 @@ async function createShiftAction(formData: FormData) {
     redirect('/admin?error=after-hours#create-shift')
   }
 
+  let assignmentCreatedForUserId: string | null = null
+  if (assignedUserId) {
+    const userExists = await db.select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, assignedUserId), ne(users.role, 'inactive')))
+      .limit(1)
+
+    if (userExists.length === 0) {
+      redirect('/admin?error=invalid-assignee#create-shift')
+    }
+
+    if (await userHasApprovedTimeOffForShift(assignedUserId, startDateTime, endDateTime)) {
+      redirect('/admin?error=assignee-unavailable#create-shift')
+    }
+  }
+
   const [newShift] = await db.insert(shifts).values({
     title,
     location,
@@ -154,21 +207,13 @@ async function createShiftAction(formData: FormData) {
     createdBy: session.user.id,
   }).returning({ id: shifts.id })
 
-  let assignmentCreatedForUserId: string | null = null
   if (assignedUserId) {
-    const userExists = await db.select({ id: users.id })
-      .from(users)
-      .where(and(eq(users.id, assignedUserId), ne(users.role, 'inactive')))
-      .limit(1)
-
-    if (userExists.length > 0) {
-      await db.insert(assignments).values({
-        shiftId: newShift.id,
-        userId: assignedUserId,
-        status: 'assigned',
-      })
-      assignmentCreatedForUserId = assignedUserId
-    }
+    await db.insert(assignments).values({
+      shiftId: newShift.id,
+      userId: assignedUserId,
+      status: 'assigned',
+    })
+    assignmentCreatedForUserId = assignedUserId
   }
 
   if (assignmentCreatedForUserId && status !== 'draft') {
@@ -603,6 +648,21 @@ async function updateShiftAction(formData: FormData) {
     redirect('/admin?error=edit-after-hours#upcoming-shifts')
   }
 
+  if (assignedUserId) {
+    const matchingUser = await db.select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, assignedUserId), ne(users.role, 'inactive')))
+      .limit(1)
+
+    if (matchingUser.length === 0) {
+      redirect('/admin?error=invalid-assignee#upcoming-shifts')
+    }
+
+    if (await userHasApprovedTimeOffForShift(assignedUserId, startDateTime, endDateTime)) {
+      redirect('/admin?error=assignee-unavailable#upcoming-shifts')
+    }
+  }
+
   const updatedShift = await db.update(shifts).set({
     title,
     location,
@@ -628,15 +688,6 @@ async function updateShiftAction(formData: FormData) {
   const previousAssignedUserIds = [...new Set(existingAssignedRows.map((row) => row.userId))]
 
   if (assignedUserId) {
-    const matchingUser = await db.select({ id: users.id })
-      .from(users)
-      .where(and(eq(users.id, assignedUserId), ne(users.role, 'inactive')))
-      .limit(1)
-
-    if (matchingUser.length === 0) {
-      redirect('/admin?error=invalid-assignee#upcoming-shifts')
-    }
-
     const alreadyAssigned = existingAssignedRows.find((row) => row.userId === assignedUserId)
 
     if (alreadyAssigned) {
@@ -1472,6 +1523,42 @@ type StaffRow = {
   phone: string | null
   role: string
   onboardingEmailSentAt: Date | null
+  unavailableWindows?: StaffUnavailableWindow[]
+}
+
+type StaffUnavailableWindow = {
+  startDate: string
+  endDate: string
+  unavailableStartMinute: number
+  unavailableEndMinute: number
+  reason: string | null
+}
+
+function unavailableReasonLabel(reason: string | null) {
+  const trimmed = reason?.trim()
+  return trimmed ? `Unavailable: ${trimmed}` : 'On vacation'
+}
+
+function staffUnavailableReasonForShift(staff: StaffRow, shift: ShiftRow) {
+  const date = chicagoDateInputValue(shift.startTime)
+  const startMinute = shiftMinutes(shift.startTime)
+  const endMinute = shiftMinutes(shift.endTime)
+  if (startMinute === null || endMinute === null) return null
+
+  const conflict = staff.unavailableWindows?.find((window) => (
+    timeOffRequestCoversShiftWindow(window, {
+      date,
+      startMinute,
+      endMinute,
+    })
+  ))
+
+  return conflict ? unavailableReasonLabel(conflict.reason) : null
+}
+
+function staffOptionLabel(staff: StaffRow, unavailableReason: string | null) {
+  const base = `${staff.name} (${staff.role})`
+  return unavailableReason ? `${base} - ${unavailableReason}` : base
 }
 
 function ShiftEditPopup({
@@ -1508,11 +1595,15 @@ function ShiftEditPopup({
             defaultValue={assignedUserId}
           >
             <option value="">Unassigned</option>
-            {staff.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.role})
-              </option>
-            ))}
+            {staff.map((s) => {
+              const unavailable = staffUnavailableReasonForShift(s, shift)
+              const isCurrentAssignee = s.id === assignedUserId
+              return (
+                <option key={s.id} value={s.id} disabled={Boolean(unavailable) && !isCurrentAssignee}>
+                  {staffOptionLabel(s, unavailable)}
+                </option>
+              )
+            })}
           </select>
           <p className="text-xs text-muted-foreground">
             Change or clear the assignee. They&rsquo;ll be notified if removed. The shift slot stays open.
@@ -1996,6 +2087,41 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   }
 
   const schedulableStaffRows = staffRows.filter((staff) => staff.role !== 'inactive')
+  const lastUpcomingShift = upcomingShiftRows[upcomingShiftRows.length - 1]
+  const staffTimeOffRangeStart = parseDateOnly(chicagoDateInputValue(now)) ?? now
+  const staffTimeOffRangeEnd = parseDateOnly(chicagoDateInputValue(lastUpcomingShift?.startTime ?? now)) ?? now
+  const approvedStaffTimeOffRows = schedulableStaffRows.length === 0
+    ? []
+    : await db.select({
+        userId: timeOffRequests.userId,
+        startDate: timeOffRequests.startDate,
+        endDate: timeOffRequests.endDate,
+        unavailableStartMinute: timeOffRequests.unavailableStartMinute,
+        unavailableEndMinute: timeOffRequests.unavailableEndMinute,
+        reason: timeOffRequests.reason,
+      })
+        .from(timeOffRequests)
+        .where(and(
+          eq(timeOffRequests.status, 'approved'),
+          lte(timeOffRequests.startDate, staffTimeOffRangeEnd),
+          gte(timeOffRequests.endDate, staffTimeOffRangeStart),
+        ))
+  const staffTimeOffByUserId = new Map<string, StaffUnavailableWindow[]>()
+  for (const row of approvedStaffTimeOffRows) {
+    const windows = staffTimeOffByUserId.get(row.userId) ?? []
+    windows.push({
+      startDate: chicagoDateInputValue(row.startDate),
+      endDate: chicagoDateInputValue(row.endDate),
+      unavailableStartMinute: row.unavailableStartMinute,
+      unavailableEndMinute: row.unavailableEndMinute,
+      reason: row.reason,
+    })
+    staffTimeOffByUserId.set(row.userId, windows)
+  }
+  const schedulableStaffWithAvailability = schedulableStaffRows.map((staff) => ({
+    ...staff,
+    unavailableWindows: staffTimeOffByUserId.get(staff.id) ?? [],
+  }))
   const activeStaff = schedulableStaffRows
   const pendingRequestsCount = pendingTimeOffRows.length + pendingSwapRows.length
   const unfilledUpcomingShifts = upcomingShiftRows.filter((shift) => {
@@ -2483,7 +2609,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             <ShiftEditPopup
                               shift={shift}
                               assignedUserId={assignedUserId}
-                              staff={schedulableStaffRows}
+                              staff={schedulableStaffWithAvailability}
                               initialOpen={openShiftId === shift.id}
                             />
                           </div>
