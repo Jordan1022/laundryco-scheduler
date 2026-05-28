@@ -11,8 +11,8 @@ export function generateMetadata(): Metadata {
     description: 'Employee shift scheduling for Laundry Co.',
     manifest: '/manifest.webmanifest',
     icons: {
-      icon: '/icon',
-      apple: '/apple-icon',
+      icon: '/icon.png',
+      apple: '/apple-icon.png',
     },
     appleWebApp: {
       capable: true,
