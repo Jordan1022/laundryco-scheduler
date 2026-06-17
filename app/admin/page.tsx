@@ -163,6 +163,7 @@ async function createShiftAction(formData: FormData) {
   const startTime = String(formData.get('startTime') ?? '')
   const endTime = String(formData.get('endTime') ?? '')
   const assignedUserId = String(formData.get('assignedUserId') ?? '')
+  const overrideTimeOff = formData.get('overrideTimeOff') === 'on'
   const requestedStatus = String(formData.get('status') ?? 'published')
   const status = requestedStatus === 'draft' ? 'draft' : 'published'
 
@@ -192,7 +193,7 @@ async function createShiftAction(formData: FormData) {
       redirect('/admin?error=invalid-assignee#create-shift')
     }
 
-    if (await userHasApprovedTimeOffForShift(assignedUserId, startDateTime, endDateTime)) {
+    if (!overrideTimeOff && await userHasApprovedTimeOffForShift(assignedUserId, startDateTime, endDateTime)) {
       redirect('/admin?error=assignee-unavailable#create-shift')
     }
   }
@@ -630,6 +631,7 @@ async function updateShiftAction(formData: FormData) {
   const startTime = String(formData.get('startTime') ?? '')
   const endTime = String(formData.get('endTime') ?? '')
   const assignedUserId = String(formData.get('assignedUserId') ?? '')
+  const overrideTimeOff = formData.get('overrideTimeOff') === 'on'
   const requestedStatus = String(formData.get('status') ?? 'published')
   const status = requestedStatus === 'draft' || requestedStatus === 'cancelled' ? requestedStatus : 'published'
 
@@ -658,7 +660,7 @@ async function updateShiftAction(formData: FormData) {
       redirect('/admin?error=invalid-assignee#upcoming-shifts')
     }
 
-    if (await userHasApprovedTimeOffForShift(assignedUserId, startDateTime, endDateTime)) {
+    if (!overrideTimeOff && await userHasApprovedTimeOffForShift(assignedUserId, startDateTime, endDateTime)) {
       redirect('/admin?error=assignee-unavailable#upcoming-shifts')
     }
   }
@@ -1597,9 +1599,8 @@ function ShiftEditPopup({
             <option value="">Unassigned</option>
             {staff.map((s) => {
               const unavailable = staffUnavailableReasonForShift(s, shift)
-              const isCurrentAssignee = s.id === assignedUserId
               return (
-                <option key={s.id} value={s.id} disabled={Boolean(unavailable) && !isCurrentAssignee}>
+                <option key={s.id} value={s.id}>
                   {staffOptionLabel(s, unavailable)}
                 </option>
               )
@@ -1608,6 +1609,19 @@ function ShiftEditPopup({
           <p className="text-xs text-muted-foreground">
             Change or clear the assignee. They&rsquo;ll be notified if removed. The shift slot stays open.
           </p>
+          <label className="mt-2 flex items-start gap-2 rounded-sm border border-dashed border-ink/30 p-3 text-sm">
+            <input
+              type="checkbox"
+              name="overrideTimeOff"
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              <span className="font-medium text-ink">Override approved time off</span>
+              <span className="block text-xs text-muted-foreground">
+                Use only after confirming this person can cover the shift.
+              </span>
+            </span>
+          </label>
           <label className="mt-2 flex items-start gap-2 rounded-sm border border-dashed border-ink/30 p-3 text-sm">
             <input
               type="checkbox"
@@ -2448,6 +2462,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       ))}
                     </select>
                   </div>
+                  <label className="flex items-start gap-2 rounded-sm border border-dashed border-ink/30 p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      name="overrideTimeOff"
+                      className="mt-0.5 h-4 w-4"
+                    />
+                    <span>
+                      <span className="font-medium text-ink">Override approved time off</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Use only after confirming this person can cover the shift.
+                      </span>
+                    </span>
+                  </label>
                   <div className="space-y-1.5">
                     <label htmlFor="shiftDate" className="text-sm font-medium">Date</label>
                     <DatePickerField id="shiftDate" name="shiftDate" required />

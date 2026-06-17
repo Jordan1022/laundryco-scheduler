@@ -122,6 +122,8 @@ export default function ScheduleGridWithModal({
   const [overflowDayKey, setOverflowDayKey] = useState<string | null>(null)
   const [createStartTime, setCreateStartTime] = useState('16:00')
   const [createEndTime, setCreateEndTime] = useState('20:00')
+  const [assignOverrideTimeOff, setAssignOverrideTimeOff] = useState(false)
+  const [createOverrideTimeOff, setCreateOverrideTimeOff] = useState(false)
 
   const activeShiftContext = useMemo(() => {
     if (!activeShift) return null
@@ -149,12 +151,14 @@ export default function ScheduleGridWithModal({
 
   const openShift = (dayKey: string, shiftId: string) => {
     setOverflowDayKey(null)
+    setAssignOverrideTimeOff(false)
     setActiveShift({ dayKey, shiftId })
   }
 
   const openCreateShift = (dayKey: string) => {
     setCreateStartTime('16:00')
     setCreateEndTime('20:00')
+    setCreateOverrideTimeOff(false)
     setCreateDayKey(dayKey)
   }
 
@@ -352,13 +356,26 @@ export default function ScheduleGridWithModal({
                     )
                     const isCurrentAssignee = staff.id === activeShiftContext.shift.assignedUserId
                     return (
-                      <option key={staff.id} value={staff.id} disabled={Boolean(unavailable) && !isCurrentAssignee}>
+                      <option key={staff.id} value={staff.id} disabled={Boolean(unavailable) && !isCurrentAssignee && !assignOverrideTimeOff}>
                         {formatStaffOptionLabel(staff, unavailable)}
                       </option>
                     )
                   })}
                 </select>
               </div>
+              <label className="flex w-full items-start gap-2 rounded-sm border border-dashed border-ink/20 bg-paper-dim px-3 py-2 text-xs text-ink-muted">
+                <input
+                  type="checkbox"
+                  name="overrideTimeOff"
+                  checked={assignOverrideTimeOff}
+                  onChange={(event) => setAssignOverrideTimeOff(event.currentTarget.checked)}
+                  className="mt-0.5 h-4 w-4"
+                />
+                <span>
+                  <span className="font-medium text-ink">Override approved time off</span>
+                  <span className="block">Use only after confirming this person can cover the shift.</span>
+                </span>
+              </label>
               <Button type="submit" size="sm">
                 {activeShiftContext.shift.isOpen ? 'Fill' : 'Save'}
               </Button>
@@ -498,13 +515,26 @@ export default function ScheduleGridWithModal({
                     timeValueToMinutes(createEndTime),
                   )
                   return (
-                    <option key={staff.id} value={staff.id} disabled={Boolean(unavailable)}>
+                    <option key={staff.id} value={staff.id} disabled={Boolean(unavailable) && !createOverrideTimeOff}>
                       {formatStaffOptionLabel(staff, unavailable)}
                     </option>
                   )
                 })}
               </select>
             </div>
+            <label className="flex items-start gap-2 rounded-sm border border-dashed border-ink/20 bg-paper-dim px-3 py-2 text-xs text-ink-muted sm:col-span-2">
+              <input
+                type="checkbox"
+                name="overrideTimeOff"
+                checked={createOverrideTimeOff}
+                onChange={(event) => setCreateOverrideTimeOff(event.currentTarget.checked)}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>
+                <span className="font-medium text-ink">Override approved time off</span>
+                <span className="block">Use only after confirming this person can cover the shift.</span>
+              </span>
+            </label>
             <div className="space-y-1">
               <label htmlFor="calendar-shift-status" className="text-sm font-medium">Status</label>
               <select

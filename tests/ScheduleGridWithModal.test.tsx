@@ -180,6 +180,58 @@ describe('ScheduleGridWithModal', () => {
     expect(bobOption.disabled).toBe(true)
   })
 
+  it('enables unavailable staff when the manager checks the time-off override', async () => {
+    const user = userEvent.setup()
+
+    const openDay = {
+      ...baseDay,
+      shiftCount: 1,
+      visibleShifts: [openShift],
+      shifts: [openShift],
+    }
+
+    render(
+      <ScheduleGridWithModal
+        weekdayLabels={['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']}
+        selectedView="week"
+        dayEntries={[openDay]}
+        canManageStaff
+        staffOptions={[
+          { id: 'user-alice', name: 'Alice', role: 'employee' },
+          {
+            id: 'user-bob',
+            name: 'Bob',
+            role: 'employee',
+            unavailableWindows: [{
+              startDate: '2026-04-16',
+              endDate: '2026-04-16',
+              unavailableStartMinute: 16 * 60,
+              unavailableEndMinute: 20 * 60,
+              reason: null,
+            }],
+          } as any,
+        ]}
+        returnView="week"
+        returnDate="2026-04-16"
+        assignShiftAction={vi.fn()}
+      />,
+    )
+
+    const tiles = screen.getAllByRole('button', { name: /Open · needs staff 16:00.*20:00/i })
+    await user.click(tiles[0])
+
+    const bobOption = screen.getByRole('option', { name: 'Bob (employee) - On vacation' }) as HTMLOptionElement
+    const override = screen.getByLabelText(/Override approved time off/i) as HTMLInputElement
+
+    expect(bobOption.disabled).toBe(true)
+    expect(override.checked).toBe(false)
+
+    await user.click(override)
+
+    expect(override.checked).toBe(true)
+    expect(bobOption.disabled).toBe(false)
+  })
+
   it('does not render the inline assign form when the user cannot manage staff', async () => {
     const user = userEvent.setup()
 

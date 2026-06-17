@@ -382,6 +382,7 @@ async function createShiftFromCalendarAction(formData: FormData) {
   const startTime = String(formData.get('startTime') ?? '')
   const endTime = String(formData.get('endTime') ?? '')
   const assignedUserId = String(formData.get('assignedUserId') ?? '')
+  const overrideTimeOff = formData.get('overrideTimeOff') === 'on'
   const requestedStatus = String(formData.get('status') ?? 'published')
   const status = requestedStatus === 'draft' ? 'draft' : 'published'
 
@@ -411,7 +412,7 @@ async function createShiftFromCalendarAction(formData: FormData) {
       redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-invalid-assignee', hash: 'schedule' }))
     }
 
-    if (await userHasApprovedTimeOffForShift(assignedUserId, startDateTime, endDateTime)) {
+    if (!overrideTimeOff && await userHasApprovedTimeOffForShift(assignedUserId, startDateTime, endDateTime)) {
       redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-assignee-unavailable', hash: 'schedule' }))
     }
   }
@@ -461,6 +462,7 @@ async function assignShiftFromCalendarAction(formData: FormData) {
 
   const shiftId = String(formData.get('shiftId') ?? '')
   const assignedUserId = String(formData.get('assignedUserId') ?? '')
+  const overrideTimeOff = formData.get('overrideTimeOff') === 'on'
 
   if (!shiftId) {
     redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-missing-fields', hash: 'schedule' }))
@@ -495,7 +497,7 @@ async function assignShiftFromCalendarAction(formData: FormData) {
       redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-invalid-assignee', hash: 'schedule' }))
     }
 
-    if (await userHasApprovedTimeOffForShift(assignedUserId, shiftRow.startTime, shiftRow.endTime)) {
+    if (!overrideTimeOff && await userHasApprovedTimeOffForShift(assignedUserId, shiftRow.startTime, shiftRow.endTime)) {
       redirect(buildDashboardReturnUrl(returnView, returnDate, { error: 'calendar-assignee-unavailable', hash: 'schedule' }))
     }
 
@@ -1124,7 +1126,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               {formError === 'calendar-invalid-time' && 'Shift end time must be after start time.'}
               {formError === 'calendar-after-hours' && 'Store closes at 8:00 PM. Shifts must end by 8:00 PM.'}
               {formError === 'calendar-invalid-assignee' && 'The selected assignee does not exist.'}
-              {formError === 'calendar-assignee-unavailable' && 'That person has approved time off during this shift.'}
+              {formError === 'calendar-assignee-unavailable' && 'That person has approved time off during this shift. Check the override box if you confirmed they can cover it.'}
               {formError === 'calendar-invalid-shift' && 'That shift no longer exists.'}
             </div>
           ) : null}
