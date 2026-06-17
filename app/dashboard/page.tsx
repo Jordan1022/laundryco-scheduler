@@ -19,6 +19,23 @@ import TimeOffRequestForm, { type SubmittedTimeOffRequest } from '@/components/T
 import { DEFAULT_SHIFT_LOCATION, DEFAULT_SHIFT_TITLE } from '@/lib/scheduling'
 import { BUSINESS_TZ, chicagoDateInputValue, chicagoTimeInputValue, parseChicagoWalltime } from '@/lib/time'
 import {
+  addCalendarDays,
+  addCalendarMonths,
+  calendarDateFromChicagoDate,
+  calendarDateFromIso,
+  calendarDateToChicagoDate,
+  calendarDateToIso,
+  formatCalendarDay,
+  formatCalendarMonth,
+  formatCalendarMonthDay,
+  getMondayWeekBounds as getCalendarMondayWeekBounds,
+  getMonthCalendarBounds,
+  getMonthCalendarDays,
+  isSameCalendarMonth,
+  startOfCalendarMonth,
+  type CalendarDate,
+} from '@/lib/calendar'
+import {
   formatTimeOffWindow,
   normalizeTimeOffPresetKey,
   timeOffRequestCoversShiftWindow,
@@ -27,13 +44,7 @@ import {
 } from '@/lib/timeOff'
 
 const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: BUSINESS_TZ })
-const monthDayLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
 const shortDateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
-// Calendar-day labels come from Dates built with local constructors (parseDateParam, addDays).
-// Formatting them with a fixed timeZone reinterprets a local-midnight instant and rolls the day
-// when server TZ differs from BUSINESS_TZ — use a naive formatter to match the source instead.
-const calendarDayLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 const shortTimeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
 const dateTimeLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
 const CLOSING_TIME_MINUTES = 20 * 60 // 8:00 PM
@@ -58,34 +69,12 @@ function parseViewParam(rawView: string | undefined): DashboardView {
   return rawView === 'month' ? 'month' : 'week'
 }
 
-function parseDateParam(rawDate: string | undefined) {
-  if (!rawDate) return new Date()
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rawDate)
-  if (!match) return new Date()
-
-  const year = Number(match[1])
-  const month = Number(match[2])
-  const day = Number(match[3])
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return new Date()
-
-  const parsed = new Date(year, month - 1, day)
-  if (
-    parsed.getFullYear() !== year ||
-    parsed.getMonth() !== (month - 1) ||
-    parsed.getDate() !== day
-  ) {
-    return new Date()
-  }
-
-  return parsed
+function parseDateParam(rawDate: string | undefined, fallback: CalendarDate) {
+  return calendarDateFromIso(rawDate) ?? fallback
 }
 
-function formatDateParam(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
-
-function buildDashboardLink(view: DashboardView, date: Date) {
-  return `/dashboard?view=${view}&date=${formatDateParam(date)}`
+function buildDashboardLink(view: DashboardView, date: CalendarDate) {
+  return `/dashboard?view=${view}&date=${calendarDateToIso(date)}`
 }
 
 function addDays(date: Date, days: number) {
@@ -94,30 +83,8 @@ function addDays(date: Date, days: number) {
   return next
 }
 
-function toStartOfDay(date: Date) {
-  const normalized = new Date(date)
-  normalized.setHours(0, 0, 0, 0)
-  return normalized
-}
-
-function getMondayWeekBounds(baseDate: Date) {
-  const start = toStartOfDay(baseDate)
-  const diffToMonday = (start.getDay() + 6) % 7
-  start.setDate(start.getDate() - diffToMonday)
-  const end = addDays(start, 7)
-  return { start, end }
-}
-
-function getCalendarBounds(monthStart: Date) {
-  const calendarStart = toStartOfDay(monthStart)
-  const diffToMonday = (calendarStart.getDay() + 6) % 7
-  calendarStart.setDate(calendarStart.getDate() - diffToMonday)
-  const calendarEnd = addDays(calendarStart, 42)
-  return { calendarStart, calendarEnd }
-}
-
 function dateKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  return chicagoDateInputValue(date)
 }
 
 function shiftHours(startTime: Date, endTime: Date) {
@@ -203,7 +170,7 @@ async function userHasApprovedTimeOffForShift(userId: string, startTime: Date, e
 
 function buildDashboardReturnUrl(
   view: DashboardView,
-  date: Date,
+  date: CalendarDate,
   options?: {
     status?: string
     error?: string
@@ -212,7 +179,7 @@ function buildDashboardReturnUrl(
 ) {
   const params = new URLSearchParams({
     view,
-    date: formatDateParam(date),
+    date: calendarDateToIso(date),
   })
 
   if (options?.status) params.set('status', options.status)
@@ -224,7 +191,7 @@ function buildDashboardReturnUrl(
 
 function getReturnContext(formData: FormData) {
   const returnView = parseViewParam(String(formData.get('returnView') ?? ''))
-  const returnDate = toStartOfDay(parseDateParam(String(formData.get('returnDate') ?? '')))
+  const returnDate = parseDateParam(String(formData.get('returnDate') ?? ''), calendarDateFromChicagoDate(new Date()))
   return { returnView, returnDate }
 }
 
@@ -672,19 +639,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const { name, role } = session.user
   const canManageStaff = role === 'manager' || role === 'admin'
-  const selectedView = parseViewParam(getQueryValue(searchParams?.view))
-  const anchorDate = toStartOfDay(parseDateParam(getQueryValue(searchParams?.date)))
-  const monthStart = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1)
-  const { start: selectedWeekStart, end: selectedWeekEnd } = getMondayWeekBounds(anchorDate)
-  const { calendarStart, calendarEnd } = getCalendarBounds(monthStart)
   const now = new Date()
+  const todayCalendarDate = calendarDateFromChicagoDate(now)
+  const selectedView = parseViewParam(getQueryValue(searchParams?.view))
+  const anchorDate = parseDateParam(getQueryValue(searchParams?.date), todayCalendarDate)
+  const monthStart = startOfCalendarMonth(anchorDate)
+  const { start: selectedWeekStartDate, endExclusive: selectedWeekEndDate } = getCalendarMondayWeekBounds(anchorDate)
+  const { start: calendarStartDate, endExclusive: calendarEndDate } = getMonthCalendarBounds(monthStart)
+  const scheduleStartDate = selectedView === 'month' ? calendarStartDate : selectedWeekStartDate
+  const scheduleEndExclusiveDate = selectedView === 'month' ? calendarEndDate : selectedWeekEndDate
+  const scheduleRangeStart = calendarDateToChicagoDate(scheduleStartDate)
+  const scheduleRangeEnd = calendarDateToChicagoDate(scheduleEndExclusiveDate)
+  const { start: thisWeekStartDate, endExclusive: thisWeekEndDate } = getCalendarMondayWeekBounds(todayCalendarDate)
+  const thisWeekStart = calendarDateToChicagoDate(thisWeekStartDate)
+  const thisWeekEnd = calendarDateToChicagoDate(thisWeekEndDate)
   const nextSevenDays = addDays(now, 7)
-  const { start: thisWeekStart, end: thisWeekEnd } = getMondayWeekBounds(now)
-
-  const scheduleRangeStart = selectedView === 'month' ? calendarStart : selectedWeekStart
-  const scheduleRangeEnd = selectedView === 'month' ? calendarEnd : selectedWeekEnd
-  const scheduleTimeOffStart = parseChicagoDate(formatDateParam(scheduleRangeStart)) ?? scheduleRangeStart
-  const scheduleTimeOffEnd = parseChicagoDate(formatDateParam(addDays(scheduleRangeEnd, -1))) ?? addDays(scheduleRangeEnd, -1)
+  const scheduleTimeOffStart = scheduleRangeStart
+  const scheduleTimeOffEnd = calendarDateToChicagoDate(addCalendarDays(scheduleEndExclusiveDate, -1))
 
   const [
     scheduledShiftRows,
@@ -872,11 +843,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     }
   }
 
-  const monthDays = Array.from({ length: 42 }, (_, index) => addDays(calendarStart, index))
-  const weekDays = Array.from({ length: 7 }, (_, index) => addDays(selectedWeekStart, index))
+  const monthDays = getMonthCalendarDays(monthStart)
+  const weekDays = Array.from({ length: 7 }, (_, index) => addCalendarDays(selectedWeekStartDate, index))
   const visibleDays = selectedView === 'month' ? monthDays : weekDays
 
-  const todayKey = dateKey(now)
+  const todayKey = calendarDateToIso(todayCalendarDate)
   const upcomingShiftCount = upcomingShiftRows.length
   const thisWeekHours = thisWeekShiftRows.reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0)
   const teamCount = teamRows.length
@@ -925,7 +896,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const maxDayShiftsVisible = selectedView === 'month' ? 2 : 4
   const firstName = (full: string) => full.split(' ')[0] || full
   const dayEntries = visibleDays.map((day) => {
-    const key = dateKey(day)
+    const key = calendarDateToIso(day)
     const dayShifts = shiftsByDay.get(key) ?? []
     const compactShifts = dayShifts.map((shift) => {
       const names = shift.assignees.map((a) => firstName(a.name))
@@ -953,35 +924,36 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     })
     return {
       key,
-      dateIso: formatDateParam(day),
-      dayNumber: day.getDate(),
+      dateIso: key,
+      dayNumber: day.day,
       isToday: key === todayKey,
-      isCurrentMonth: day.getMonth() === monthStart.getMonth() && day.getFullYear() === monthStart.getFullYear(),
+      isCurrentMonth: isSameCalendarMonth(day, monthStart),
       shiftCount: compactShifts.length,
       visibleShifts: compactShifts.slice(0, maxDayShiftsVisible),
       hiddenShiftCount: Math.max(0, compactShifts.length - maxDayShiftsVisible),
       shifts: compactShifts,
-      dateLabel: calendarDayLabel.format(day),
+      dateLabel: formatCalendarDay(day),
     }
   })
 
   const prevAnchor = selectedView === 'month'
-    ? new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, 1)
-    : addDays(anchorDate, -7)
+    ? addCalendarMonths(monthStart, -1)
+    : addCalendarDays(anchorDate, -7)
   const nextAnchor = selectedView === 'month'
-    ? new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1)
-    : addDays(anchorDate, 7)
+    ? addCalendarMonths(monthStart, 1)
+    : addCalendarDays(anchorDate, 7)
   const viewTitle = selectedView === 'month'
-    ? monthLabel.format(monthStart)
-    : `${monthDayLabel.format(selectedWeekStart)} - ${monthDayLabel.format(addDays(selectedWeekEnd, -1))}`
+    ? formatCalendarMonth(monthStart)
+    : `${formatCalendarMonthDay(selectedWeekStartDate)} - ${formatCalendarMonthDay(addCalendarDays(selectedWeekEndDate, -1))}`
 
   const nextShift = upcomingShiftRows[0]
+  const nextShiftCalendarDate = nextShift ? calendarDateFromChicagoDate(nextShift.startTime) : null
   const nextShiftDateParts = nextShift
     ? {
         weekday: new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: BUSINESS_TZ }).format(nextShift.startTime),
         month: new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: BUSINESS_TZ }).format(nextShift.startTime).toUpperCase(),
-        day: nextShift.startTime.getDate(),
-        year: nextShift.startTime.getFullYear(),
+        day: nextShiftCalendarDate!.day,
+        year: nextShiftCalendarDate!.year,
         startLabel: shortTimeLabel.format(nextShift.startTime),
         endLabel: shortTimeLabel.format(nextShift.endTime),
         ticketNo: String(nextShift.shiftId).slice(0, 6).toUpperCase(),
@@ -1121,7 +1093,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </Link>
               </Button>
               <Button asChild size="sm" variant="outline">
-                <Link href={buildDashboardLink('week', now)}>Today</Link>
+                <Link href={buildDashboardLink('week', todayCalendarDate)}>Today</Link>
               </Button>
               <Button asChild size="sm" variant="outline">
                 <Link href={buildDashboardLink(selectedView, nextAnchor)}>
@@ -1165,7 +1137,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               canManageStaff={canManageStaff}
               staffOptions={schedulableStaffOptions}
               returnView={selectedView}
-              returnDate={formatDateParam(anchorDate)}
+              returnDate={calendarDateToIso(anchorDate)}
               createShiftAction={canManageStaff ? createShiftFromCalendarAction : undefined}
               assignShiftAction={canManageStaff ? assignShiftFromCalendarAction : undefined}
               cancelShiftAction={canManageStaff ? cancelShiftFromCalendarAction : undefined}
@@ -1190,7 +1162,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               {notificationRows.length > 0 ? (
                 <form action={dismissAllNotificationsAction}>
                   <input type="hidden" name="returnView" value={selectedView} />
-                  <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                  <input type="hidden" name="returnDate" value={calendarDateToIso(anchorDate)} />
                   <ConfirmSubmitButton
                     type="submit"
                     size="sm"
@@ -1241,7 +1213,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <form action={dismissNotificationAction} className="absolute right-1 top-2">
                       <input type="hidden" name="notificationId" value={notification.id} />
                       <input type="hidden" name="returnView" value={selectedView} />
-                      <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                      <input type="hidden" name="returnDate" value={calendarDateToIso(anchorDate)} />
                       <button
                         type="submit"
                         aria-label="Dismiss notification"
@@ -1288,7 +1260,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <TimeOffRequestForm
                 defaultDate={chicagoDateInputValue(now)}
                 returnView={selectedView}
-                returnDate={formatDateParam(anchorDate)}
+                returnDate={calendarDateToIso(anchorDate)}
                 formAction={requestTimeOffAction}
                 submittedRequests={submittedTimeOffRequests}
               />
@@ -1334,7 +1306,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ) : (
                 <form action={requestSwapAction} className="space-y-4">
                   <input type="hidden" name="returnView" value={selectedView} />
-                  <input type="hidden" name="returnDate" value={formatDateParam(anchorDate)} />
+                  <input type="hidden" name="returnDate" value={calendarDateToIso(anchorDate)} />
                   <div className="space-y-1">
                     <label htmlFor="assignmentId" className="stamp text-ink/60">Your shift</label>
                     <select
