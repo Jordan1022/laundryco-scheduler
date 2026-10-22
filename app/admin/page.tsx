@@ -1489,23 +1489,25 @@ async function reviewSwapAction(formData: FormData) {
   redirect('/admin?status=swap-approved#requests')
 }
 
+type AdminSearchParams = {
+  status?: string | string[]
+  error?: string | string[]
+  count?: string | string[]
+  replaced?: string | string[]
+  conflicts?: string | string[]
+  skipped?: string | string[]
+  recurringAssigned?: string | string[]
+  onboardingSent?: string | string[]
+  onboardingFailed?: string | string[]
+  openShiftId?: string | string[]
+  openStaffId?: string | string[]
+  tab?: string | string[]
+  create?: string | string[]
+  shiftFilter?: string | string[]
+}
+
 type AdminPageProps = {
-  searchParams?: {
-    status?: string | string[]
-    error?: string | string[]
-    count?: string | string[]
-    replaced?: string | string[]
-    conflicts?: string | string[]
-    skipped?: string | string[]
-    recurringAssigned?: string | string[]
-    onboardingSent?: string | string[]
-    onboardingFailed?: string | string[]
-    openShiftId?: string | string[]
-    openStaffId?: string | string[]
-    tab?: string | string[]
-    create?: string | string[]
-    shiftFilter?: string | string[]
-  }
+  searchParams?: Promise<AdminSearchParams>
 }
 
 type ShiftRow = {
@@ -1952,8 +1954,9 @@ function StaffEditPopup({
   )
 }
 
-export default async function AdminPage({ searchParams }: AdminPageProps) {
+export default async function AdminPage({ searchParams: searchParamsPromise }: AdminPageProps) {
   const session = await requireManagerSession()
+  const searchParams = await searchParamsPromise
 
   const now = new Date()
   const { start: weekStart, end: weekEnd } = getWeekBounds(now)

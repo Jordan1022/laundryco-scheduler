@@ -1,11 +1,7 @@
 process.env.TZ = 'UTC'
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  experimental: {
-    instrumentationHook: true,
-  },
-}
+const nextConfig = {}
 
 module.exports = nextConfig
 

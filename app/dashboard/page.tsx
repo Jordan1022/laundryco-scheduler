@@ -51,13 +51,15 @@ const CLOSING_TIME_MINUTES = 20 * 60 // 8:00 PM
 
 type DashboardView = 'week' | 'month'
 
+type DashboardSearchParams = {
+  view?: string | string[]
+  date?: string | string[]
+  status?: string | string[]
+  error?: string | string[]
+}
+
 type DashboardPageProps = {
-  searchParams?: {
-    view?: string | string[]
-    date?: string | string[]
-    status?: string | string[]
-    error?: string | string[]
-  }
+  searchParams?: Promise<DashboardSearchParams>
 }
 
 function getQueryValue(value: string | string[] | undefined) {
@@ -636,8 +638,9 @@ async function dismissAllNotificationsAction(formData: FormData) {
   redirect(buildDashboardReturnUrl(returnView, returnDate, { hash: 'notifications' }))
 }
 
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+export default async function DashboardPage({ searchParams: searchParamsPromise }: DashboardPageProps) {
   const session = await requireAuthenticatedSession()
+  const searchParams = await searchParamsPromise
 
   const { name, role } = session.user
   const canManageStaff = role === 'manager' || role === 'admin'

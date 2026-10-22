@@ -10,11 +10,13 @@ import { Input } from '@/components/ui/input'
 import { Brandmark } from '@/components/ui/Brandmark'
 import { TicketCard } from '@/components/ui/TicketCard'
 
+type PasswordSearchParams = {
+  status?: string | string[]
+  error?: string | string[]
+}
+
 type PasswordPageProps = {
-  searchParams?: {
-    status?: string | string[]
-    error?: string | string[]
-  }
+  searchParams?: Promise<PasswordSearchParams>
 }
 
 function getQueryValue(value: string | string[] | undefined) {
@@ -89,8 +91,9 @@ const ERROR_COPY: Record<string, string> = {
   'account-not-ready': 'This account can’t update its password yet — ask a manager.',
 }
 
-export default async function PasswordPage({ searchParams }: PasswordPageProps) {
+export default async function PasswordPage({ searchParams: searchParamsPromise }: PasswordPageProps) {
   await requireAuthenticatedSession()
+  const searchParams = await searchParamsPromise
 
   const formStatus = getQueryValue(searchParams?.status)
   const formError = getQueryValue(searchParams?.error)
